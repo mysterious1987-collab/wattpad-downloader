@@ -7,446 +7,180 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  /* ── RESET & BASE ── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f12;--surface:#141720;--surface2:#1c2030;--surface3:#222740;
+  --border:#2a2f3f;--border2:#353c50;
+  --accent:#ff6b35;--accent2:#ff9a6c;
+  --green:#3ddc84;--red:#ff4757;--yellow:#ffd32a;--blue:#4ea8ff;
+  --text:#e8ecf4;--muted:#6b7590;--muted2:#9099b0;
+  --mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+html{font-size:15px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;line-height:1.6}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4}
 
-  :root {
-    --bg:        #0d0f12;
-    --surface:   #141720;
-    --surface2:  #1c2030;
-    --border:    #2a2f3f;
-    --border2:   #353c50;
-    --accent:    #ff6b35;
-    --accent2:   #ff9a6c;
-    --green:     #3ddc84;
-    --red:       #ff4757;
-    --yellow:    #ffd32a;
-    --text:      #e8ecf4;
-    --muted:     #6b7590;
-    --muted2:    #9099b0;
-    --mono:      'Space Mono', monospace;
-    --sans:      'DM Sans', sans-serif;
-  }
+.shell{position:relative;z-index:1;max-width:800px;margin:0 auto;padding:44px 20px 80px}
 
-  html { font-size: 15px; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    line-height: 1.6;
-  }
+/* HEADER */
+header{margin-bottom:36px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.logo-block{display:flex;align-items:center;gap:14px}
+.logo-icon{width:44px;height:44px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 0 24px rgba(255,107,53,.35)}
+.logo-text h1{font-family:var(--mono);font-size:1.1rem;letter-spacing:-.5px}
+.logo-text p{font-size:.78rem;color:var(--muted);margin-top:1px}
+.version-badge{font-family:var(--mono);font-size:.68rem;color:var(--accent);background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.25);padding:3px 8px;border-radius:4px;align-self:flex-start;margin-top:4px}
 
-  /* ── NOISE TEXTURE overlay ── */
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none; z-index: 0; opacity: .4;
-  }
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:14px;transition:border-color .2s}
+.card:focus-within{border-color:var(--border2)}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;cursor:pointer;user-select:none}
+.card-title{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2)}
+.card-title span{font-size:.95rem}
+.chevron{color:var(--muted);font-size:.7rem;transition:transform .25s}
+.collapsed .chevron{transform:rotate(-90deg)}
+.collapsible-body{overflow:hidden;transition:max-height .3s ease}
+.collapsed .collapsible-body{max-height:0!important}
 
-  /* ── LAYOUT ── */
-  .shell {
-    position: relative; z-index: 1;
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 48px 24px 80px;
-  }
+/* FORM */
+label{display:block;font-size:.78rem;color:var(--muted2);margin-bottom:5px;font-weight:500}
+input[type=text],input[type=password],textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:.8rem;padding:9px 13px;outline:none;transition:border-color .15s,box-shadow .15s;resize:none}
+input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,107,53,.12)}
+textarea{min-height:90px;line-height:1.7}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.field-row{grid-template-columns:1fr}}
+.hint{font-size:.72rem;color:var(--muted);margin-top:4px}
+.hint a{color:var(--accent2);text-decoration:none}
 
-  /* ── HEADER ── */
-  header {
-    margin-bottom: 40px;
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 16px;
-  }
-  .logo-block { display: flex; align-items: center; gap: 14px; }
-  .logo-icon {
-    width: 44px; height: 44px;
-    background: var(--accent);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-    flex-shrink: 0;
-    box-shadow: 0 0 24px rgba(255,107,53,.35);
-  }
-  .logo-text h1 {
-    font-family: var(--mono);
-    font-size: 1.15rem;
-    letter-spacing: -.5px;
-    color: var(--text);
-  }
-  .logo-text p {
-    font-size: .8rem;
-    color: var(--muted);
-    margin-top: 1px;
-  }
-  .version-badge {
-    font-family: var(--mono);
-    font-size: .7rem;
-    color: var(--accent);
-    background: rgba(255,107,53,.12);
-    border: 1px solid rgba(255,107,53,.25);
-    padding: 3px 8px;
-    border-radius: 4px;
-    align-self: flex-start;
-    margin-top: 4px;
-  }
+/* FORMAT CHECKBOXES */
+.format-grid{display:flex;gap:8px;flex-wrap:wrap}
+.fmt-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 13px;cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--muted2);transition:all .15s;user-select:none}
+.fmt-chip:hover{border-color:var(--border2);color:var(--text)}
+.fmt-chip.on{background:rgba(255,107,53,.1);border-color:var(--accent);color:var(--accent2)}
+.fmt-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);transition:background .15s;flex-shrink:0}
+.fmt-chip.on .fmt-dot{background:var(--accent)}
 
-  /* ── CARD ── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 24px;
-    margin-bottom: 16px;
-    transition: border-color .2s;
-  }
-  .card:focus-within { border-color: var(--border2); }
+/* ARTIFACT NAME */
+.name-row{display:flex;gap:8px}
+.name-row input{flex:1}
+.btn-ghost{padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted2);cursor:pointer;font-family:var(--mono);font-size:.75rem;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text)}
 
-  .card-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 18px;
-    cursor: pointer;
-    user-select: none;
-  }
-  .card-title {
-    display: flex; align-items: center; gap: 10px;
-    font-family: var(--mono);
-    font-size: .8rem;
-    font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--muted2);
-  }
-  .card-title span { font-size: 1rem; }
-  .chevron {
-    color: var(--muted);
-    font-size: .75rem;
-    transition: transform .25s;
-  }
-  .collapsed .chevron { transform: rotate(-90deg); }
-  .collapsible-body { overflow: hidden; transition: max-height .3s ease; }
-  .collapsed .collapsible-body { max-height: 0 !important; }
+/* PAT */
+.pat-row{position:relative}
+.pat-row input{padding-right:42px}
+.pat-eye{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:4px}
+.pat-eye:hover{color:var(--text)}
 
-  /* ── FORM ELEMENTS ── */
-  label {
-    display: block;
-    font-size: .8rem;
-    color: var(--muted2);
-    margin-bottom: 6px;
-    font-weight: 500;
-  }
-  input[type=text], input[type=password], textarea {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: .82rem;
-    padding: 10px 14px;
-    outline: none;
-    transition: border-color .15s, box-shadow .15s;
-    resize: none;
-  }
-  input[type=text]:focus, input[type=password]:focus, textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(255,107,53,.12);
-  }
-  textarea { min-height: 100px; line-height: 1.7; }
+/* SETUP STATUS */
+.setup-status{display:flex;align-items:center;gap:6px;font-size:.72rem}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.bad{background:var(--red)}
 
-  .field { margin-bottom: 16px; }
-  .field:last-child { margin-bottom: 0; }
+/* GUIDE */
+.guide-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px}
+.guide-label{font-family:var(--mono);font-size:.68rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.guide-steps{counter-reset:step}
+.guide-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;font-size:.8rem;color:var(--muted2)}
+.guide-step::before{counter-increment:step;content:counter(step);width:18px;height:18px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.65rem;margin-top:2px}
+.guide-step code{background:var(--surface);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:.75rem;color:var(--accent2)}
 
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 500px) { .field-row { grid-template-columns: 1fr; } }
+/* PRIMARY BUTTON */
+.btn-primary{width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px;font-family:var(--mono);font-size:.88rem;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:18px}
+.btn-primary:hover:not(:disabled){background:var(--accent2);box-shadow:0 4px 24px rgba(255,107,53,.4);transform:translateY(-1px)}
+.btn-primary:active:not(:disabled){transform:translateY(0)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:7px;padding:6px 11px;font-family:var(--mono);font-size:.72rem;cursor:pointer;transition:all .15s}
+.btn-sm:hover{border-color:var(--border2);color:var(--text)}
 
-  .hint {
-    font-size: .75rem;
-    color: var(--muted);
-    margin-top: 5px;
-  }
-  .hint a { color: var(--accent2); text-decoration: none; }
-  .hint a:hover { text-decoration: underline; }
+/* ── STORY BLOCKS ── */
+.stories-list{display:flex;flex-direction:column;gap:10px}
+.story-block{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s}
+.story-block.loaded{border-color:var(--border2)}
+.story-block-hdr{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.story-cover{width:36px;height:36px;border-radius:6px;object-fit:cover;background:var(--surface3);flex-shrink:0;border:1px solid var(--border)}
+.story-cover-ph{width:36px;height:36px;border-radius:6px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;border:1px solid var(--border)}
+.story-info{flex:1;min-width:0}
+.story-title{font-size:.88rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.story-meta{font-size:.72rem;color:var(--muted);margin-top:1px;font-family:var(--mono)}
+.story-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.story-sel-count{font-family:var(--mono);font-size:.7rem;color:var(--accent2);background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);padding:2px 8px;border-radius:4px;white-space:nowrap}
+.story-chevron{color:var(--muted);font-size:.65rem;transition:transform .2s}
+.story-block.open .story-chevron{transform:rotate(180deg)}
 
-  /* ── FORMAT CHECKBOXES ── */
-  .format-grid {
-    display: flex; gap: 10px; flex-wrap: wrap;
-  }
-  .fmt-label {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
-    font-family: var(--mono);
-    font-size: .8rem;
-    color: var(--muted2);
-    transition: all .15s;
-    user-select: none;
-  }
-  .fmt-label:hover { border-color: var(--border2); color: var(--text); }
-  .fmt-label input { display: none; }
-  .fmt-label.checked {
-    background: rgba(255,107,53,.1);
-    border-color: var(--accent);
-    color: var(--accent2);
-  }
-  .fmt-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--border2);
-    transition: background .15s;
-  }
-  .fmt-label.checked .fmt-dot { background: var(--accent); }
+/* CHAPTER LIST */
+.chapter-list-wrap{border-top:1px solid var(--border);display:none}
+.story-block.open .chapter-list-wrap{display:block}
+.chapter-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.chapter-toolbar span{font-size:.72rem;color:var(--muted);font-family:var(--mono);margin-right:auto}
+.chapter-list{max-height:280px;overflow-y:auto;padding:6px 8px}
+.chapter-list::-webkit-scrollbar{width:4px}
+.chapter-list::-webkit-scrollbar-track{background:transparent}
+.chapter-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.chapter-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;cursor:pointer;transition:background .12s;user-select:none}
+.chapter-item:hover{background:var(--surface3)}
+.chapter-item.selected{background:rgba(255,107,53,.06)}
+.ch-num{font-family:var(--mono);font-size:.65rem;color:var(--muted);width:28px;text-align:right;flex-shrink:0}
+.ch-check{width:15px;height:15px;border:1px solid var(--border2);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s;font-size:.55rem}
+.chapter-item.selected .ch-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-title{font-size:.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.ch-words{font-family:var(--mono);font-size:.65rem;color:var(--muted);flex-shrink:0}
+.story-loading{padding:24px;text-align:center;color:var(--muted);font-size:.8rem;display:flex;align-items:center;justify-content:center;gap:8px}
 
-  /* ── ARTIFACT NAME ── */
-  .name-row {
-    display: flex; align-items: center; gap: 8px;
-    position: relative;
-  }
-  .name-row input { flex: 1; }
-  .name-suggest-btn {
-    padding: 10px 12px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--muted2);
-    cursor: pointer;
-    font-size: .85rem;
-    transition: all .15s;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .name-suggest-btn:hover { border-color: var(--border2); color: var(--text); }
+/* URL PARSE STATE */
+.url-input-row{display:flex;gap:8px}
+.url-input-row textarea{flex:1}
+.btn-load-stories{padding:9px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted2);cursor:pointer;font-family:var(--mono);font-size:.75rem;transition:all .15s;white-space:nowrap;flex-shrink:0;align-self:flex-start;margin-top:0}
+.btn-load-stories:hover{border-color:var(--accent);color:var(--accent2)}
+.btn-load-stories:disabled{opacity:.4;cursor:not-allowed}
 
-  /* ── PAT VISIBILITY ── */
-  .pat-row { position: relative; }
-  .pat-row input { padding-right: 44px; }
-  .pat-eye {
-    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    background: none; border: none;
-    color: var(--muted); cursor: pointer; font-size: 1rem;
-    padding: 4px;
-  }
-  .pat-eye:hover { color: var(--text); }
+/* RUNS */
+.runs-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.poll-indicator{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+.poll-dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.poll-dot.active{background:var(--green);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.run-item{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;transition:border-color .2s;animation:slideIn .2s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+.run-item:hover{border-color:var(--border2)}
+.run-status-icon{font-size:1rem;flex-shrink:0;width:18px;text-align:center}
+.run-info{flex:1;min-width:0}
+.run-name{font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.run-meta{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.run-badge{padding:1px 6px;border-radius:4px;font-size:.65rem;font-family:var(--mono);font-weight:700;letter-spacing:.04em}
+.badge-running{background:rgba(255,211,42,.12);color:var(--yellow);border:1px solid rgba(255,211,42,.25)}
+.badge-success{background:rgba(61,220,132,.12);color:var(--green);border:1px solid rgba(61,220,132,.25)}
+.badge-failure{background:rgba(255,71,87,.12);color:var(--red);border:1px solid rgba(255,71,87,.25)}
+.badge-queued{background:rgba(107,117,144,.12);color:var(--muted2);border:1px solid rgba(107,117,144,.25)}
+.run-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.run-link{font-family:var(--mono);font-size:.7rem;color:var(--muted2);text-decoration:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 9px;transition:all .15s;white-space:nowrap;cursor:pointer}
+.run-link:hover{border-color:var(--accent);color:var(--accent2)}
+.run-link.dl{background:rgba(61,220,132,.08);border-color:rgba(61,220,132,.25);color:var(--green)}
+.run-link.dl:hover{background:rgba(61,220,132,.15)}
+.run-link.dl.loading{opacity:.6;cursor:wait}
 
-  /* ── STATUS INDICATOR ── */
-  .setup-status {
-    display: flex; align-items: center; gap: 6px;
-    font-size: .75rem;
-  }
-  .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--muted);
-  }
-  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot.bad { background: var(--red); }
+/* PROGRESS STEPS */
+.run-steps{margin-top:8px;padding:0 13px 10px}
+.step-bar{display:flex;gap:4px;flex-wrap:wrap}
+.step-pip{width:8px;height:8px;border-radius:2px;background:var(--border);transition:all .3s}
+.step-pip.done{background:var(--green)}
+.step-pip.active{background:var(--yellow);animation:pulse 1s infinite}
+.step-pip.fail{background:var(--red)}
+.step-label{font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-top:4px}
 
-  /* ── BUTTON ── */
-  .btn-primary {
-    width: 100%;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 14px;
-    font-family: var(--mono);
-    font-size: .9rem;
-    font-weight: 700;
-    letter-spacing: .04em;
-    cursor: pointer;
-    transition: all .15s;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    margin-top: 20px;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent2);
-    box-shadow: 0 4px 24px rgba(255,107,53,.4);
-    transform: translateY(-1px);
-  }
-  .btn-primary:active:not(:disabled) { transform: translateY(0); }
-  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+.empty-runs{text-align:center;padding:28px;color:var(--muted);font-size:.82rem}
 
-  .btn-sm {
-    background: var(--surface2);
-    color: var(--muted2);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 6px 12px;
-    font-family: var(--mono);
-    font-size: .75rem;
-    cursor: pointer;
-    transition: all .15s;
-  }
-  .btn-sm:hover { border-color: var(--border2); color: var(--text); }
-
-  /* ── RUNS LIST ── */
-  .runs-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 14px;
-  }
-  .poll-indicator {
-    display: flex; align-items: center; gap: 6px;
-    font-size: .72rem;
-    color: var(--muted);
-    font-family: var(--mono);
-  }
-  .poll-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--muted);
-  }
-  .poll-dot.active {
-    background: var(--green);
-    animation: pulse 1.5s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .3; }
-  }
-
-  .run-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 14px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 8px;
-    transition: border-color .2s;
-    animation: slideIn .25s ease;
-  }
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .run-item:hover { border-color: var(--border2); }
-
-  .run-status-icon { font-size: 1.1rem; flex-shrink: 0; width: 20px; text-align: center; }
-  .run-info { flex: 1; min-width: 0; }
-  .run-name {
-    font-size: .85rem;
-    color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-weight: 500;
-  }
-  .run-meta {
-    font-family: var(--mono);
-    font-size: .7rem;
-    color: var(--muted);
-    margin-top: 2px;
-    display: flex; gap: 10px; align-items: center;
-  }
-  .run-badge {
-    padding: 1px 7px;
-    border-radius: 4px;
-    font-size: .68rem;
-    font-family: var(--mono);
-    font-weight: 700;
-    letter-spacing: .04em;
-  }
-  .badge-running { background: rgba(255,211,42,.12); color: var(--yellow); border: 1px solid rgba(255,211,42,.25); }
-  .badge-success { background: rgba(61,220,132,.12); color: var(--green);  border: 1px solid rgba(61,220,132,.25); }
-  .badge-failure { background: rgba(255,71,87,.12);  color: var(--red);    border: 1px solid rgba(255,71,87,.25); }
-  .badge-queued  { background: rgba(107,117,144,.12); color: var(--muted2); border: 1px solid rgba(107,117,144,.25); }
-
-  .run-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .run-link {
-    font-family: var(--mono);
-    font-size: .72rem;
-    color: var(--muted2);
-    text-decoration: none;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    transition: all .15s;
-    white-space: nowrap;
-  }
-  .run-link:hover { border-color: var(--accent); color: var(--accent2); }
-  .run-link.primary-link {
-    background: rgba(255,107,53,.1);
-    border-color: rgba(255,107,53,.3);
-    color: var(--accent2);
-  }
-
-  .empty-runs {
-    text-align: center;
-    padding: 32px;
-    color: var(--muted);
-    font-size: .85rem;
-  }
-
-  /* ── TOAST ── */
-  #toast {
-    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 10px;
-    padding: 12px 20px;
-    font-size: .82rem;
-    font-family: var(--mono);
-    box-shadow: 0 8px 32px rgba(0,0,0,.5);
-    z-index: 999;
-    opacity: 0;
-    transition: opacity .2s, transform .2s;
-    pointer-events: none;
-    max-width: 400px;
-    text-align: center;
-  }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
-  #toast.success { border-color: rgba(61,220,132,.4); color: var(--green); }
-  #toast.error   { border-color: rgba(255,71,87,.4);  color: var(--red);   }
-
-  /* ── SPINNER ── */
-  .spinner {
-    display: inline-block;
-    width: 14px; height: 14px;
-    border: 2px solid rgba(255,255,255,.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .6s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── DIVIDER ── */
-  .divider {
-    height: 1px;
-    background: var(--border);
-    margin: 20px 0;
-  }
-
-  /* ── SETUP GUIDE ── */
-  .guide-steps {
-    counter-reset: step;
-  }
-  .guide-step {
-    display: flex; gap: 12px; align-items: flex-start;
-    margin-bottom: 12px;
-    font-size: .82rem;
-    color: var(--muted2);
-  }
-  .guide-step::before {
-    counter-increment: step;
-    content: counter(step);
-    width: 20px; height: 20px; flex-shrink: 0;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono);
-    font-size: .7rem;
-    color: var(--muted2);
-    margin-top: 1px;
-  }
-  .guide-step code {
-    background: var(--surface2);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-family: var(--mono);
-    font-size: .78rem;
-    color: var(--accent2);
-  }
+/* SPINNER / TOAST */
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+.spinner-sm{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,.3);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 18px;font-size:.8rem;font-family:var(--mono);box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:999;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:380px;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+#toast.success{border-color:rgba(61,220,132,.4);color:var(--green)}
+#toast.error{border-color:rgba(255,71,87,.4);color:var(--red)}
+.divider{height:1px;background:var(--border);margin:16px 0}
 </style>
 </head>
 <body>
@@ -461,459 +195,592 @@
         <p>GitHub Actions · Server-side · Offline-ready</p>
       </div>
     </div>
-    <span class="version-badge">v2.0</span>
+    <span class="version-badge">v1.2</span>
   </header>
 
-  <!-- SETUP CARD -->
+  <!-- ── SETUP ── -->
   <div class="card" id="setupCard">
-    <div class="card-header" onclick="toggleCard('setupCard')">
-      <div class="card-title"><span>🔑</span> CÀI ĐẶT KẾT NỐI</div>
+    <div class="card-hdr" onclick="toggleCard('setupCard')">
+      <div class="card-title"><span>🔑</span> Cài đặt kết nối</div>
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="setup-status" id="setupStatus">
-          <div class="dot" id="setupDot"></div>
-          <span id="setupStatusText">Chưa cấu hình</span>
-        </div>
+        <div class="setup-status"><div class="dot" id="setupDot"></div><span id="setupStatusText">Chưa cấu hình</span></div>
         <div class="chevron">▼</div>
       </div>
     </div>
     <div class="collapsible-body" id="setupBody" style="max-height:600px">
-
-      <!-- Guide -->
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
-        <div style="font-family:var(--mono);font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Hướng dẫn tạo PAT (làm 1 lần)</div>
+      <div class="guide-box">
+        <div class="guide-label">Hướng dẫn tạo PAT (làm 1 lần)</div>
         <div class="guide-steps">
           <div class="guide-step">GitHub → <b style="color:var(--text)">Settings</b> → <b style="color:var(--text)">Developer settings</b> → <b style="color:var(--text)">Personal access tokens</b> → <b style="color:var(--text)">Fine-grained tokens</b></div>
-          <div class="guide-step">Bấm <b style="color:var(--text)">Generate new token</b> → Đặt tên tuỳ ý</div>
-          <div class="guide-step"><b style="color:var(--text)">Repository access</b>: chọn đúng repo wattpad-downloader</div>
-          <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> · <code>Contents → Read</code></div>
+          <div class="guide-step">Bấm <b style="color:var(--text)">Generate new token</b> → đặt tên tuỳ ý</div>
+          <div class="guide-step"><b style="color:var(--text)">Repository access</b>: chọn repo <code>wattpad-downloader</code></div>
+          <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> &nbsp;·&nbsp; <code>Contents → Read</code></div>
           <div class="guide-step">Copy token → paste vào ô bên dưới</div>
         </div>
       </div>
-
       <div class="field-row">
-        <div class="field">
-          <label>GitHub Username</label>
-          <input type="text" id="inOwner" placeholder="your-username" oninput="onSetupChange()"/>
-        </div>
-        <div class="field">
-          <label>Repo Name</label>
-          <input type="text" id="inRepo" placeholder="wattpad-downloader" oninput="onSetupChange()"/>
-        </div>
+        <div class="field"><label>GitHub Username</label><input type="text" id="inOwner" placeholder="your-username" oninput="onSetupChange()"/></div>
+        <div class="field"><label>Repo Name</label><input type="text" id="inRepo" placeholder="wattpad-downloader" oninput="onSetupChange()"/></div>
       </div>
-
       <div class="field">
         <label>Personal Access Token (PAT)</label>
         <div class="pat-row">
           <input type="password" id="inPat" placeholder="github_pat_..." oninput="onSetupChange()"/>
-          <button class="pat-eye" onclick="togglePat()" id="patEyeBtn" title="Hiện/ẩn token">👁</button>
+          <button class="pat-eye" onclick="togglePat()">👁</button>
         </div>
-        <div class="hint">Token lưu trong localStorage trình duyệt, không gửi đi đâu ngoài api.github.com</div>
+        <div class="hint">Token lưu trong localStorage, không gửi đi đâu ngoài api.github.com</div>
       </div>
-
       <button class="btn-sm" onclick="saveSetup()" style="width:100%;padding:10px">Lưu cài đặt</button>
     </div>
   </div>
 
-  <!-- DOWNLOAD CARD -->
+  <!-- ── DOWNLOAD REQUEST ── -->
   <div class="card">
-    <div class="card-title" style="margin-bottom:18px"><span>⬇️</span> YÊU CẦU TẢI</div>
+    <div class="card-title" style="margin-bottom:16px"><span>⬇️</span> Yêu cầu tải</div>
 
+    <!-- URL INPUT -->
     <div class="field">
       <label>URLs Wattpad <span style="color:var(--muted)">(mỗi dòng 1 URL)</span></label>
-      <textarea id="inUrls" placeholder="https://www.wattpad.com/story/123456-ten-truyen&#10;https://www.wattpad.com/story/789012-truyen-khac" oninput="onUrlsChange()"></textarea>
+      <div class="url-input-row">
+        <textarea id="inUrls" placeholder="https://www.wattpad.com/story/123456-ten-truyen&#10;https://www.wattpad.com/story/789012-truyen-khac" oninput="onUrlsChange()"></textarea>
+        <button class="btn-load-stories" id="btnLoadStories" onclick="loadStories()" disabled>🔍 Xem chapters</button>
+      </div>
       <div class="hint" id="urlCount">Nhập URL để bắt đầu</div>
     </div>
 
+    <!-- STORY BLOCKS (chapter picker) -->
+    <div id="storiesList" class="stories-list" style="margin-bottom:14px;display:none"></div>
+
+    <!-- FORMAT -->
     <div class="field">
       <label>Format xuất</label>
       <div class="format-grid" id="formatGrid">
-        <label class="fmt-label checked" onclick="toggleFmt(this,'epub')">
-          <input type="checkbox" checked/><div class="fmt-dot"></div>EPUB
-        </label>
-        <label class="fmt-label" onclick="toggleFmt(this,'txt')">
-          <input type="checkbox"/><div class="fmt-dot"></div>TXT
-        </label>
-        <label class="fmt-label" onclick="toggleFmt(this,'md')">
-          <input type="checkbox"/><div class="fmt-dot"></div>Markdown
-        </label>
-        <label class="fmt-label" onclick="toggleFmt(this,'json')">
-          <input type="checkbox"/><div class="fmt-dot"></div>JSON
-        </label>
+        <div class="fmt-chip on" data-fmt="epub" onclick="toggleFmt(this)"><div class="fmt-dot"></div>EPUB</div>
+        <div class="fmt-chip" data-fmt="txt"  onclick="toggleFmt(this)"><div class="fmt-dot"></div>TXT</div>
+        <div class="fmt-chip" data-fmt="md"   onclick="toggleFmt(this)"><div class="fmt-dot"></div>Markdown</div>
+        <div class="fmt-chip" data-fmt="json" onclick="toggleFmt(this)"><div class="fmt-dot"></div>JSON</div>
       </div>
     </div>
 
+    <!-- ARTIFACT NAME -->
     <div class="field">
       <label>Tên artifact <span style="color:var(--muted)">(để trống = tự sinh)</span></label>
       <div class="name-row">
         <input type="text" id="inArtifactName" placeholder="ten-truyen_2026-04-02"/>
-        <button class="name-suggest-btn" onclick="suggestName()" title="Tự sinh tên từ URL">✨ Gợi ý</button>
+        <button class="btn-ghost" onclick="suggestName()">✨ Gợi ý</button>
       </div>
-      <div class="hint" id="nameHint">Tên dùng khi tải file từ Artifacts</div>
+      <div class="hint" id="nameHint">Tên dùng khi tải artifact về</div>
     </div>
 
     <button class="btn-primary" id="btnTrigger" onclick="triggerWorkflow()" disabled>
-      <span id="btnIcon">🚀</span>
-      <span id="btnText">Bắt đầu tải</span>
+      <span id="btnIcon">🚀</span><span id="btnText">Bắt đầu tải</span>
     </button>
   </div>
 
-  <!-- RUNS CARD -->
+  <!-- ── RUNS ── -->
   <div class="card">
-    <div class="runs-header">
-      <div class="card-title"><span>📊</span> LỊCH SỬ CHẠY</div>
+    <div class="runs-hdr">
+      <div class="card-title"><span>📊</span> Lịch sử chạy</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <div class="poll-indicator">
-          <div class="poll-dot" id="pollDot"></div>
-          <span id="pollText">—</span>
-        </div>
+        <div class="poll-indicator"><div class="poll-dot" id="pollDot"></div><span id="pollText">—</span></div>
         <button class="btn-sm" onclick="loadRuns()">↻ Refresh</button>
       </div>
     </div>
-    <div id="runsList">
-      <div class="empty-runs">Lưu cài đặt để xem lịch sử chạy</div>
-    </div>
+    <div id="runsList"><div class="empty-runs">Lưu cài đặt để xem lịch sử</div></div>
   </div>
 
-</div><!-- /shell -->
-
-<!-- TOAST -->
+</div>
 <div id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // STATE
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 const S = {
-  owner: '', repo: '', pat: '',
+  owner:'', repo:'', pat:'',
   formats: new Set(['epub']),
+  // storyId → { meta, selectedChapters: Set<number>|null }
+  stories: new Map(),
   pollInterval: null,
-  polling: false,
 };
 
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // INIT
-// ══════════════════════════════════════════
-(function init() {
-  S.owner = localStorage.getItem('wp_owner') || '';
-  S.repo  = localStorage.getItem('wp_repo')  || 'wattpad-downloader';
-  S.pat   = localStorage.getItem('wp_pat')   || '';
-
+// ════════════════════════════════════════
+(function init(){
+  S.owner = localStorage.getItem('wp_owner')||'';
+  S.repo  = localStorage.getItem('wp_repo') ||'wattpad-downloader';
+  S.pat   = localStorage.getItem('wp_pat')  ||'';
   document.getElementById('inOwner').value = S.owner;
   document.getElementById('inRepo').value  = S.repo;
   document.getElementById('inPat').value   = S.pat;
-
   updateSetupStatus();
   updateTriggerBtn();
-
-  if (S.owner && S.repo && S.pat) {
-    collapseCard('setupCard');
-    loadRuns();
-    startPolling();
-  }
+  if(S.owner&&S.repo&&S.pat){ collapseCard('setupCard'); loadRuns(); startPolling(); }
 })();
 
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // CARD COLLAPSE
-// ══════════════════════════════════════════
-function toggleCard(id) {
-  const card = document.getElementById(id);
-  const body = document.getElementById(id.replace('Card','Body'));
-  if (!body) return;
+// ════════════════════════════════════════
+function toggleCard(id){
+  const card=document.getElementById(id);
+  const body=document.getElementById(id.replace('Card','Body'));
+  if(!body) return;
   card.classList.toggle('collapsed');
-  if (!card.classList.contains('collapsed')) {
-    body.style.maxHeight = body.scrollHeight + 'px';
-  } else {
-    body.style.maxHeight = '0';
-  }
+  body.style.maxHeight = card.classList.contains('collapsed') ? '0' : body.scrollHeight+'px';
 }
-function collapseCard(id) {
-  const card = document.getElementById(id);
-  const body = document.getElementById(id.replace('Card','Body'));
-  if (!body) return;
-  card.classList.add('collapsed');
-  body.style.maxHeight = '0';
+function collapseCard(id){
+  const card=document.getElementById(id), body=document.getElementById(id.replace('Card','Body'));
+  if(!body) return;
+  card.classList.add('collapsed'); body.style.maxHeight='0';
 }
 
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // SETUP
-// ══════════════════════════════════════════
-function onSetupChange() { updateSetupStatus(); updateTriggerBtn(); }
-
-function updateSetupStatus() {
-  const o = document.getElementById('inOwner').value.trim();
-  const r = document.getElementById('inRepo').value.trim();
-  const p = document.getElementById('inPat').value.trim();
-  const ok = o && r && p;
-  document.getElementById('setupDot').className = 'dot ' + (ok ? 'ok' : 'bad');
+// ════════════════════════════════════════
+function onSetupChange(){ updateSetupStatus(); updateTriggerBtn(); }
+function updateSetupStatus(){
+  const ok = document.getElementById('inOwner').value.trim() &&
+             document.getElementById('inRepo').value.trim() &&
+             document.getElementById('inPat').value.trim();
+  document.getElementById('setupDot').className = 'dot '+(ok?'ok':'bad');
   document.getElementById('setupStatusText').textContent = ok ? 'Đã cấu hình' : 'Chưa đầy đủ';
 }
-
-function saveSetup() {
-  const o = document.getElementById('inOwner').value.trim();
-  const r = document.getElementById('inRepo').value.trim();
-  const p = document.getElementById('inPat').value.trim();
-  if (!o || !r || !p) { toast('Điền đầy đủ username, repo và PAT', 'error'); return; }
-  localStorage.setItem('wp_owner', o);
-  localStorage.setItem('wp_repo',  r);
-  localStorage.setItem('wp_pat',   p);
-  S.owner = o; S.repo = r; S.pat = p;
-  updateSetupStatus();
-  updateTriggerBtn();
-  toast('Đã lưu cài đặt ✓', 'success');
-  collapseCard('setupCard');
-  loadRuns();
-  startPolling();
+function saveSetup(){
+  const o=document.getElementById('inOwner').value.trim();
+  const r=document.getElementById('inRepo').value.trim();
+  const p=document.getElementById('inPat').value.trim();
+  if(!o||!r||!p){ toast('Điền đầy đủ username, repo và PAT','error'); return; }
+  localStorage.setItem('wp_owner',o); localStorage.setItem('wp_repo',r); localStorage.setItem('wp_pat',p);
+  S.owner=o; S.repo=r; S.pat=p;
+  updateSetupStatus(); updateTriggerBtn();
+  toast('Đã lưu cài đặt ✓','success');
+  collapseCard('setupCard'); loadRuns(); startPolling();
+}
+function togglePat(){
+  const i=document.getElementById('inPat'); i.type=i.type==='password'?'text':'password';
 }
 
-function togglePat() {
-  const inp = document.getElementById('inPat');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-}
-
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // FORMAT
-// ══════════════════════════════════════════
-function toggleFmt(label, fmt) {
+// ════════════════════════════════════════
+function toggleFmt(el){
+  const fmt=el.dataset.fmt;
   S.formats.has(fmt) ? S.formats.delete(fmt) : S.formats.add(fmt);
-  label.classList.toggle('checked', S.formats.has(fmt));
-  label.querySelector('input').checked = S.formats.has(fmt);
+  el.classList.toggle('on', S.formats.has(fmt));
   updateTriggerBtn();
 }
 
-// ══════════════════════════════════════════
-// URLS
-// ══════════════════════════════════════════
-function onUrlsChange() {
-  const urls = parseUrls();
-  const el = document.getElementById('urlCount');
-  if (urls.length === 0) {
-    el.textContent = 'Nhập URL để bắt đầu';
-  } else {
-    el.textContent = `${urls.length} URL hợp lệ`;
-    el.style.color = 'var(--green)';
-  }
+// ════════════════════════════════════════
+// URLs
+// ════════════════════════════════════════
+function onUrlsChange(){
+  const urls=parseUrls();
+  const el=document.getElementById('urlCount');
+  if(!urls.length){ el.textContent='Nhập URL để bắt đầu'; el.style.color=''; }
+  else { el.textContent=`${urls.length} URL hợp lệ`; el.style.color='var(--green)'; }
+  document.getElementById('btnLoadStories').disabled = !urls.length;
   updateTriggerBtn();
 }
-
-function parseUrls() {
+function parseUrls(){
   return document.getElementById('inUrls').value
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && l.includes('wattpad.com'));
+    .split('\n').map(l=>l.trim()).filter(l=>l&&l.includes('wattpad.com'));
+}
+function extractStoryId(url){
+  const m = url.match(/(?:story|chapter)\/(\d+)/);
+  return m ? m[1] : null;
 }
 
-// ══════════════════════════════════════════
-// ARTIFACT NAME SUGGEST
-// ══════════════════════════════════════════
-function suggestName() {
+// ════════════════════════════════════════
+// LOAD STORIES + CHAPTER PICKER
+// ════════════════════════════════════════
+async function loadStories(){
   const urls = parseUrls();
-  const date = new Date().toISOString().slice(0,10);
-  let name = '';
-  if (urls.length === 0) {
-    name = `wattpad_${date}`;
-  } else if (urls.length === 1) {
-    const m = urls[0].match(/story\/\d+-([^/?]+)/);
-    const slug = m ? m[1].replace(/-/g,' ').slice(0,40).trim().replace(/\s+/g,'-') : 'story';
-    name = `${slug}_${date}`;
-  } else {
-    name = `batch-${urls.length}-stories_${date}`;
+  if(!urls.length) return;
+  const btn = document.getElementById('btnLoadStories');
+  btn.disabled=true; btn.textContent='⏳ Đang tải...';
+
+  const container = document.getElementById('storiesList');
+  container.style.display='flex'; container.innerHTML='';
+
+  // Khởi tạo placeholder cho từng URL
+  const storyIds = [];
+  for(const url of urls){
+    const sid = extractStoryIdFromUrl(url);
+    storyIds.push({url, sid});
+    container.insertAdjacentHTML('beforeend', renderStoryPlaceholder(sid||url));
   }
-  document.getElementById('inArtifactName').value = name;
-  document.getElementById('nameHint').textContent = `✨ Tên tự sinh từ ${urls.length} URL`;
+
+  // Fetch metadata song song
+  await Promise.all(storyIds.map(async ({url, sid}, idx)=>{
+    const el = container.children[idx];
+    try {
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.wattpad.com/api/v3/stories/${sid||extractStoryIdFallback(url)}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`)}`;
+      // Thử direct fetch trước (không cần CORS với Wattpad API JSON)
+      let meta;
+      try {
+        const res = await fetch(`https://www.wattpad.com/api/v3/stories/${sid||extractStoryIdFallback(url)}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`);
+        if(res.ok) meta = await res.json();
+      } catch {}
+      if(!meta){
+        const res = await fetch(proxyUrl);
+        if(res.ok){ const d=await res.json(); meta=JSON.parse(d.contents); }
+      }
+      if(!meta) throw new Error('Không lấy được metadata');
+
+      const realId = String(meta.id);
+      if(!S.stories.has(realId)){
+        S.stories.set(realId, { meta, selectedChapters: null }); // null = all
+      }
+      el.outerHTML = renderStoryBlock(meta);
+    } catch(e){
+      el.innerHTML = `<div style="padding:12px 14px;font-size:.8rem;color:var(--red)">⚠ Không load được: ${escHtml(url)}</div>`;
+    }
+  }));
+
+  btn.disabled=false; btn.textContent='🔍 Xem chapters';
+  updateTriggerBtn();
 }
 
-// ══════════════════════════════════════════
+function extractStoryIdFromUrl(url){
+  const m = url.match(/story\/(\d+)/);
+  return m ? m[1] : null;
+}
+function extractStoryIdFallback(url){
+  const m = url.match(/\/(\d{5,})/);
+  return m ? m[1] : '0';
+}
+
+function renderStoryPlaceholder(label){
+  return `<div class="story-block"><div class="story-loading"><span class="spinner-sm" style="color:var(--muted)"></span> Đang tải ${escHtml(String(label))}...</div></div>`;
+}
+
+function renderStoryBlock(meta){
+  const sid = String(meta.id);
+  const parts = meta.parts||[];
+  const coverHtml = meta.cover
+    ? `<img class="story-cover" src="${meta.cover}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" alt=""/><div class="story-cover-ph" style="display:none">📖</div>`
+    : `<div class="story-cover-ph">📖</div>`;
+  const chapHtml = parts.map((p,i)=>`
+    <div class="chapter-item selected" data-idx="${i+1}" data-sid="${sid}" onclick="toggleChapter(this)">
+      <div class="ch-num">${i+1}</div>
+      <div class="ch-check">✓</div>
+      <div class="ch-title">${escHtml(p.title)}</div>
+      <div class="ch-words">${p.wordCount?Math.round(p.wordCount/1000)+'k':'—'}</div>
+    </div>`).join('');
+
+  return `<div class="story-block loaded open" id="sb-${sid}">
+    <div class="story-block-hdr" onclick="toggleStoryBlock('${sid}')">
+      ${coverHtml}
+      <div class="story-info">
+        <div class="story-title">${escHtml(meta.title)}</div>
+        <div class="story-meta">${escHtml(meta.user?.name||'—')} · ${parts.length} chapters ${meta.completed?'· ✓ Hoàn thành':''}</div>
+      </div>
+      <div class="story-actions">
+        <span class="story-sel-count" id="sc-${sid}">${parts.length}/${parts.length}</span>
+        <div class="story-chevron">▲</div>
+      </div>
+    </div>
+    <div class="chapter-list-wrap">
+      <div class="chapter-toolbar">
+        <span id="ct-${sid}">${parts.length} chapters được chọn</span>
+        <button class="btn-sm" onclick="selectAllChapters('${sid}',true)">✓ Chọn tất cả</button>
+        <button class="btn-sm" onclick="selectAllChapters('${sid}',false)">✗ Bỏ tất cả</button>
+      </div>
+      <div class="chapter-list" id="cl-${sid}">${chapHtml}</div>
+    </div>
+  </div>`;
+}
+
+function toggleStoryBlock(sid){
+  const el = document.getElementById('sb-'+sid);
+  el.classList.toggle('open');
+}
+
+function toggleChapter(el){
+  el.classList.toggle('selected');
+  updateStorySelCount(el.dataset.sid);
+  updateTriggerBtn();
+}
+
+function selectAllChapters(sid, select){
+  const list = document.getElementById('cl-'+sid);
+  list.querySelectorAll('.chapter-item').forEach(el=>{
+    el.classList.toggle('selected', select);
+  });
+  updateStorySelCount(sid);
+  updateTriggerBtn();
+}
+
+function updateStorySelCount(sid){
+  const list = document.getElementById('cl-'+sid);
+  if(!list) return;
+  const total = list.querySelectorAll('.chapter-item').length;
+  const sel   = list.querySelectorAll('.chapter-item.selected').length;
+  document.getElementById('sc-'+sid).textContent = `${sel}/${total}`;
+  document.getElementById('ct-'+sid).textContent = `${sel} chapters được chọn`;
+
+  // Cập nhật S.stories
+  const entry = S.stories.get(sid);
+  if(!entry) return;
+  if(sel===total){ entry.selectedChapters=null; return; } // all
+  const indices = new Set();
+  list.querySelectorAll('.chapter-item.selected').forEach(el=>indices.add(parseInt(el.dataset.idx)));
+  entry.selectedChapters = indices.size ? indices : null;
+}
+
+// ════════════════════════════════════════
+// ARTIFACT NAME
+// ════════════════════════════════════════
+function suggestName(){
+  const urls=parseUrls();
+  const date=new Date().toISOString().slice(0,10);
+  let name='';
+  if(!urls.length) name=`wattpad_${date}`;
+  else if(urls.length===1){
+    const m=urls[0].match(/story\/\d+-([^/?]+)/);
+    const slug=m?m[1].slice(0,40):'story';
+    name=`${slug}_${date}`;
+  } else name=`batch-${urls.length}-stories_${date}`;
+  document.getElementById('inArtifactName').value=name;
+  document.getElementById('nameHint').textContent=`✨ Tự sinh từ ${urls.length} URL`;
+}
+
+// ════════════════════════════════════════
+// BUILD chapters_map JSON
+// ════════════════════════════════════════
+function buildChaptersMap(){
+  if(!S.stories.size) return null;
+  const map={};
+  let hasSelection=false;
+  for(const [sid,entry] of S.stories){
+    if(entry.selectedChapters===null){ map[sid]='all'; }
+    else {
+      map[sid]=[...entry.selectedChapters].sort((a,b)=>a-b).join(',');
+      hasSelection=true;
+    }
+  }
+  return hasSelection ? JSON.stringify(map) : null;
+}
+
+// ════════════════════════════════════════
 // TRIGGER
-// ══════════════════════════════════════════
-function updateTriggerBtn() {
-  const ready = S.owner && S.repo && S.pat && parseUrls().length > 0 && S.formats.size > 0;
-  document.getElementById('btnTrigger').disabled = !ready;
+// ════════════════════════════════════════
+function updateTriggerBtn(){
+  const ready = S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0;
+  document.getElementById('btnTrigger').disabled=!ready;
 }
 
-async function triggerWorkflow() {
-  const urls    = parseUrls();
-  const fmtStr  = [...S.formats].join(',');
-  let   artName = document.getElementById('inArtifactName').value.trim();
-  if (!artName) {
-    suggestName();
-    artName = document.getElementById('inArtifactName').value.trim();
-  }
+async function triggerWorkflow(){
+  const urls=parseUrls();
+  const fmtStr=[...S.formats].join(',');
+  let artName=document.getElementById('inArtifactName').value.trim();
+  if(!artName){ suggestName(); artName=document.getElementById('inArtifactName').value.trim(); }
+
+  const chaptersMap = buildChaptersMap();
 
   setBtnLoading(true);
-
   try {
-    const body = {
-      ref: 'main',
-      inputs: {
-        format: fmtStr,
-        urls:   urls.join('\n'),
-        artifact_name: artName,
-      }
-    };
+    const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName };
+    if(chaptersMap) inputs.chapters_map = chaptersMap;
 
-    const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`, {
-      method: 'POST',
-      body:   JSON.stringify(body),
+    const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`,{
+      method:'POST', body:JSON.stringify({ ref:'main', inputs })
     });
 
-    if (res.status === 204) {
-      toast('🚀 Đã kích hoạt! Đang chờ GitHub khởi động...', 'success');
-      document.getElementById('inUrls').value = '';
-      onUrlsChange();
-      setTimeout(loadRuns, 3000);
+    if(res.status===204){
+      toast('🚀 Đã kích hoạt! Đang chờ GitHub...','success');
+      document.getElementById('inUrls').value='';
+      document.getElementById('storiesList').style.display='none';
+      S.stories.clear(); onUrlsChange();
+      setTimeout(loadRuns,3000);
     } else {
-      const err = await res.json().catch(() => ({}));
-      toast(`Lỗi ${res.status}: ${err.message || 'Không thể trigger workflow'}`, 'error');
+      const err=await res.json().catch(()=>({}));
+      toast(`Lỗi ${res.status}: ${err.message||'Không trigger được'}`, 'error');
     }
-  } catch (e) {
-    toast(`Lỗi kết nối: ${e.message}`, 'error');
-  } finally {
-    setBtnLoading(false);
-  }
+  } catch(e){ toast(`Lỗi kết nối: ${e.message}`,'error'); }
+  finally{ setBtnLoading(false); }
 }
 
-function setBtnLoading(on) {
-  document.getElementById('btnIcon').innerHTML = on ? '<span class="spinner"></span>' : '🚀';
-  document.getElementById('btnText').textContent = on ? 'Đang gửi...' : 'Bắt đầu tải';
-  document.getElementById('btnTrigger').disabled = on;
+function setBtnLoading(on){
+  document.getElementById('btnIcon').innerHTML=on?'<span class="spinner"></span>':'🚀';
+  document.getElementById('btnText').textContent=on?'Đang gửi...':'Bắt đầu tải';
+  document.getElementById('btnTrigger').disabled=on;
 }
 
-// ══════════════════════════════════════════
-// RUNS — LOAD & RENDER
-// ══════════════════════════════════════════
-async function loadRuns() {
-  if (!S.owner || !S.repo || !S.pat) return;
+// ════════════════════════════════════════
+// RUNS
+// ════════════════════════════════════════
+async function loadRuns(){
+  if(!S.owner||!S.repo||!S.pat) return;
   try {
-    const res  = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/runs?per_page=8`);
-    if (!res.ok) { renderRuns([]); return; }
-    const data = await res.json();
-    renderRuns(data.workflow_runs || []);
-    maybeAdjustPolling(data.workflow_runs || []);
-  } catch { /* silent */ }
+    const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/runs?per_page=8`);
+    if(!res.ok){ renderRuns([]); return; }
+    const data=await res.json();
+    renderRuns(data.workflow_runs||[]);
+    maybeAdjustPolling(data.workflow_runs||[]);
+  } catch {}
 }
 
-function renderRuns(runs) {
-  const el = document.getElementById('runsList');
-  if (!runs.length) {
-    el.innerHTML = '<div class="empty-runs">Chưa có lần chạy nào<br><span style="font-size:.75rem">Nhập URL và bấm "Bắt đầu tải" để bắt đầu</span></div>';
-    return;
+function renderRuns(runs){
+  const el=document.getElementById('runsList');
+  if(!runs.length){
+    el.innerHTML='<div class="empty-runs">Chưa có lần chạy nào</div>'; return;
   }
+  el.innerHTML=runs.map(run=>{
+    const {icon,badge,cls}=runStatus(run);
+    const time=relTime(run.created_at);
+    const dur=run.status==='completed'?durStr(run.created_at,run.updated_at):'';
 
-  el.innerHTML = runs.map(run => {
-    const { icon, badge, badgeClass } = runStatus(run);
-    const time = relativeTime(run.created_at);
-    const dur  = run.status === 'completed' ? duration(run.created_at, run.updated_at) : '';
-    const artName = run.name || `Run #${run.run_number}`;
-
-    const artifactBtn = run.conclusion === 'success'
-      ? `<a class="run-link primary-link" href="${run.html_url}#artifacts" target="_blank">⬇ Tải về</a>`
+    const dlBtn = run.conclusion==='success'
+      ? `<button class="run-link dl" onclick="downloadArtifact(this,${run.id})" title="Tải artifact về máy">⬇ Tải về</button>`
       : '';
 
-    return `<div class="run-item">
+    return `<div class="run-item" id="run-${run.id}">
       <div class="run-status-icon">${icon}</div>
       <div class="run-info">
-        <div class="run-name">#${run.run_number} — ${escHtml(run.display_title || run.head_commit?.message || 'Wattpad Download')}</div>
+        <div class="run-name">#${run.run_number} — ${escHtml(run.display_title||run.head_commit?.message||'Wattpad Download')}</div>
         <div class="run-meta">
-          <span class="run-badge ${badgeClass}">${badge}</span>
+          <span class="run-badge ${cls}">${badge}</span>
           <span>${time}</span>
-          ${dur ? `<span>${dur}</span>` : ''}
+          ${dur?`<span>${dur}</span>`:''}
         </div>
+        ${run.status==='in_progress'?'<div class="run-steps" id="steps-'+run.id+'"><div class="step-label">Đang chạy...</div></div>':''}
       </div>
       <div class="run-actions">
-        ${artifactBtn}
+        ${dlBtn}
         <a class="run-link" href="${run.html_url}" target="_blank">Logs</a>
       </div>
     </div>`;
   }).join('');
+
+  // Fetch steps cho runs đang chạy
+  runs.filter(r=>r.status==='in_progress').forEach(r=>loadRunSteps(r.id));
 }
 
-function runStatus(run) {
-  if (run.status === 'queued' || run.status === 'waiting')
-    return { icon: '⏸', badge: 'QUEUED',  badgeClass: 'badge-queued' };
-  if (run.status === 'in_progress')
-    return { icon: '⚡', badge: 'RUNNING', badgeClass: 'badge-running' };
-  if (run.conclusion === 'success')
-    return { icon: '✅', badge: 'SUCCESS', badgeClass: 'badge-success' };
-  if (run.conclusion === 'failure')
-    return { icon: '❌', badge: 'FAILED',  badgeClass: 'badge-failure' };
-  return { icon: '◌', badge: run.status?.toUpperCase() || '—', badgeClass: 'badge-queued' };
+async function loadRunSteps(runId){
+  try {
+    const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/runs/${runId}/jobs`);
+    if(!res.ok) return;
+    const data=await res.json();
+    const job=data.jobs?.[0];
+    if(!job) return;
+    const el=document.getElementById('steps-'+runId);
+    if(!el) return;
+    const steps=job.steps||[];
+    const total=steps.length;
+    const done=steps.filter(s=>s.conclusion==='success').length;
+    const pips=steps.map(s=>{
+      let c='step-pip';
+      if(s.conclusion==='success') c+=' done';
+      else if(s.status==='in_progress') c+=' active';
+      else if(s.conclusion==='failure') c+=' fail';
+      return `<div class="${c}" title="${escHtml(s.name)}"></div>`;
+    }).join('');
+    el.innerHTML=`<div class="step-bar">${pips}</div><div class="step-label">${done}/${total} bước · ${job.name||'download'}</div>`;
+  } catch {}
 }
 
-function maybeAdjustPolling(runs) {
-  const hasActive = runs.some(r => r.status === 'in_progress' || r.status === 'queued' || r.status === 'waiting');
-  if (hasActive) {
-    setPollActive(true);
-    if (!S.pollInterval) startPolling();
-  } else {
-    setPollActive(false);
-    if (S.pollInterval && !runs.some(r => r.status !== 'completed')) {
-      // nothing active, slow down
+// ── Direct artifact download ──
+async function downloadArtifact(btn, runId){
+  if(btn.classList.contains('loading')) return;
+  btn.classList.add('loading'); btn.textContent='⏳';
+  try {
+    // List artifacts cho run này
+    const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/runs/${runId}/artifacts`);
+    if(!res.ok) throw new Error('Không lấy được danh sách artifact');
+    const data=await res.json();
+    const arts=data.artifacts||[];
+    if(!arts.length){ toast('Không có artifact nào','error'); return; }
+
+    if(arts.length===1){
+      await triggerArtifactDownload(arts[0].id, arts[0].name);
+    } else {
+      // Nhiều artifact: tải tất cả
+      for(const art of arts){
+        await triggerArtifactDownload(art.id, art.name);
+        await new Promise(r=>setTimeout(r,500));
+      }
     }
+    toast('Đang tải xuống...','success');
+  } catch(e){
+    toast(`Lỗi: ${e.message}`,'error');
+  } finally {
+    btn.classList.remove('loading'); btn.textContent='⬇ Tải về';
   }
 }
 
-// ══════════════════════════════════════════
+async function triggerArtifactDownload(artifactId, name){
+  // GitHub API trả về redirect 302 → URL tải thật
+  const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/artifacts/${artifactId}/zip`,{redirect:'manual'});
+  // fetch với redirect:manual không hoạt động trong browser → dùng window.open với header
+  // Workaround: dùng fetch lấy blob
+  const res2=await fetch(`https://api.github.com/repos/${S.owner}/${S.repo}/actions/artifacts/${artifactId}/zip`,{
+    headers:{ 'Authorization':`Bearer ${S.pat}`, 'X-GitHub-Api-Version':'2022-11-28' }
+  });
+  if(!res2.ok) throw new Error(`HTTP ${res2.status}`);
+  const blob=await res2.blob();
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`${name}.zip`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+function runStatus(run){
+  if(run.status==='queued'||run.status==='waiting') return{icon:'⏸',badge:'QUEUED',cls:'badge-queued'};
+  if(run.status==='in_progress') return{icon:'⚡',badge:'RUNNING',cls:'badge-running'};
+  if(run.conclusion==='success') return{icon:'✅',badge:'SUCCESS',cls:'badge-success'};
+  if(run.conclusion==='failure') return{icon:'❌',badge:'FAILED',cls:'badge-failure'};
+  return{icon:'◌',badge:(run.status||'—').toUpperCase(),cls:'badge-queued'};
+}
+
+function maybeAdjustPolling(runs){
+  const hasActive=runs.some(r=>r.status==='in_progress'||r.status==='queued'||r.status==='waiting');
+  document.getElementById('pollDot').className='poll-dot'+(hasActive?' active':'');
+  document.getElementById('pollText').textContent=hasActive?'Auto-refresh 15s':'Idle';
+}
+
+// ════════════════════════════════════════
 // POLLING
-// ══════════════════════════════════════════
-function startPolling() {
-  if (S.pollInterval) clearInterval(S.pollInterval);
-  S.pollInterval = setInterval(loadRuns, 15000);
-  setPollActive(false);
+// ════════════════════════════════════════
+function startPolling(){
+  if(S.pollInterval) clearInterval(S.pollInterval);
+  S.pollInterval=setInterval(loadRuns,15000);
 }
 
-function setPollActive(active) {
-  document.getElementById('pollDot').className = 'poll-dot' + (active ? ' active' : '');
-  document.getElementById('pollText').textContent = active ? 'Auto-refresh 15s' : 'Idle';
-}
-
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // GITHUB API
-// ══════════════════════════════════════════
-function ghApi(path, opts = {}) {
-  return fetch(`https://api.github.com${path}`, {
+// ════════════════════════════════════════
+function ghApi(path,opts={}){
+  return fetch(`https://api.github.com${path}`,{
     ...opts,
-    headers: {
-      'Authorization': `Bearer ${S.pat}`,
-      'Accept':        'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type':  'application/json',
-      ...(opts.headers || {}),
-    },
+    headers:{'Authorization':`Bearer ${S.pat}`,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json',...(opts.headers||{})}
   });
 }
 
-// ══════════════════════════════════════════
+// ════════════════════════════════════════
 // HELPERS
-// ══════════════════════════════════════════
-function relativeTime(iso) {
-  const diff = (Date.now() - new Date(iso)) / 1000;
-  if (diff < 60)    return `${Math.floor(diff)}s trước`;
-  if (diff < 3600)  return `${Math.floor(diff/60)}m trước`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}h trước`;
-  return `${Math.floor(diff/86400)}d trước`;
+// ════════════════════════════════════════
+function relTime(iso){
+  const d=(Date.now()-new Date(iso))/1000;
+  if(d<60) return `${Math.floor(d)}s trước`;
+  if(d<3600) return `${Math.floor(d/60)}m trước`;
+  if(d<86400) return `${Math.floor(d/3600)}h trước`;
+  return `${Math.floor(d/86400)}d trước`;
 }
-
-function duration(start, end) {
-  const s = Math.floor((new Date(end) - new Date(start)) / 1000);
-  if (s < 60)  return `${s}s`;
-  if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
-  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+function durStr(s,e){
+  const d=Math.floor((new Date(e)-new Date(s))/1000);
+  if(d<60) return `${d}s`;
+  if(d<3600) return `${Math.floor(d/60)}m ${d%60}s`;
+  return `${Math.floor(d/3600)}h ${Math.floor((d%3600)/60)}m`;
 }
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ══════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════
-let toastTimer;
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className   = 'show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+let toastT;
+function toast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(toastT); toastT=setTimeout(()=>{el.className='';},3500);
 }
 </script>
 </body>
