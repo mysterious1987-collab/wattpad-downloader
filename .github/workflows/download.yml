@@ -1,7 +1,7 @@
 name: Wattpad Downloader
 
 on:
-  # Chạy thủ công từ GitHub UI
+  # ── Chạy thủ công từ GitHub UI ──────────────────────────────
   workflow_dispatch:
     inputs:
       format:
@@ -9,56 +9,108 @@ on:
         required: true
         default: 'epub'
         type: choice
-        options: [epub, txt, md, json]
-      urls:
-        description: 'URLs (mỗi dòng 1, để trống = dùng urls.txt)'
-        required: false
+        options:
+          - epub
+          - txt
+          - md
+          - json
+          - epub,txt
 
-  # Hoặc tự động mỗi ngày lúc 2h sáng (tuỳ chọn)
+      urls:
+        description: 'URLs muốn tải (mỗi dòng 1, để trống = dùng urls.txt)'
+        required: false
+        type: string
+
+  # ── Tự động mỗi ngày (bỏ comment # để bật) ─────────────────
   # schedule:
-  #   - cron: '0 19 * * *'  # 19h UTC = 2h sáng GMT+7
+  #   - cron: '0 19 * * *'   # 19:00 UTC = 02:00 sáng GMT+7
 
 jobs:
   download:
     runs-on: ubuntu-latest
-    timeout-minutes: 300  # tối đa 5 tiếng
+    timeout-minutes: 300      # tối đa 5 tiếng
 
     steps:
-      - name: Checkout repo
+      # 1. Lấy code từ repo
+      - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Cài Node.js 20
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
+      # 3. Cài dependencies
       - name: Install dependencies
         run: npm install
 
+      # 4. Chuẩn bị danh sách URL
       - name: Prepare URLs
         run: |
           if [ -n "${{ github.event.inputs.urls }}" ]; then
-            echo "${{ github.event.inputs.urls }}" > urls_run.txt
-          else
+            # Dùng URLs nhập tay từ UI
+            printf '%s' "${{ github.event.inputs.urls }}" > urls_run.txt
+          elif [ -f urls.txt ]; then
+            # Dùng file urls.txt trong repo
             cp urls.txt urls_run.txt
+          else
+            echo "❌ Không có URLs! Tạo file urls.txt hoặc nhập URL khi chạy."
+            exit 1
           fi
+
           echo "=== URLs sẽ tải ==="
           cat urls_run.txt
+          echo ""
+          echo "Tổng: $(grep -c 'wattpad' urls_run.txt || echo 0) URL"
 
+      # 5. Khôi phục state từ cache (để resume)
+      - name: Restore download state
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+          restore-keys: |
+            wattpad-state-
+
+      # 6. Chạy download
       - name: Download stories
         run: |
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
-          node wattpad.js --batch urls_run.txt --format $FORMAT --output ./output
-        continue-on-error: true  # tiếp tục dù có story lỗi
+          node wattpad.js \
+            --batch urls_run.txt \
+            --format "$FORMAT" \
+            --output ./output \
+            --state ./state.json
+        continue-on-error: true   # Tiếp tục dù có story lỗi
 
-      - name: Show results
+      # 7. Lưu state để lần sau resume
+      - name: Save download state
+        uses: actions/cache/save@v4
+        if: always()             # Lưu dù thành công hay thất bại
+        with:
+          path: state.json
+          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+
+      # 8. Xem kết quả
+      - name: List output files
         run: |
           echo "=== Files đã tạo ==="
-          ls -lh output/ 2>/dev/null || echo "Không có file nào"
+          if [ -d output ] && [ "$(ls -A output)" ]; then
+            ls -lh output/
+            echo ""
+            echo "Tổng dung lượng: $(du -sh output/ | cut -f1)"
+          else
+            echo "Không có file nào được tạo."
+          fi
 
-      - name: Upload artifacts
+      # 9. Upload files để tải về
+      - name: Upload ebooks
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: ebooks-${{ github.run_number }}
+          name: ebooks-run-${{ github.run_number }}
           path: output/
-          retention-days: 30  # giữ 30 ngày
+          retention-days: 30     # Giữ 30 ngày
+          if-no-files-found: warn
