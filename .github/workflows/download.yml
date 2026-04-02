@@ -1,7 +1,7 @@
 name: Wattpad Downloader
 
 on:
-  # ── Chạy thủ công từ GitHub UI ──────────────────────────────
+  # ── Chạy thủ công từ GitHub UI hoặc từ UI trang web ────────
   workflow_dispatch:
     inputs:
       format:
@@ -15,9 +15,16 @@ on:
           - md
           - json
           - epub,txt
+          - epub,txt,md
+          - epub,txt,md,json
 
       urls:
         description: 'URLs muốn tải (mỗi dòng 1, để trống = dùng urls.txt)'
+        required: false
+        type: string
+
+      artifact_name:
+        description: 'Tên artifact khi tải về (để trống = tự sinh)'
         required: false
         type: string
 
@@ -33,13 +40,13 @@ jobs:
     steps:
       # 1. Lấy code từ repo
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # 2. Cài Node.js 20
+      # 2. Cài Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: ''
+          node-version: '22'
 
       # 3. Cài dependencies
       - name: Install dependencies
@@ -49,10 +56,8 @@ jobs:
       - name: Prepare URLs
         run: |
           if [ -n "${{ github.event.inputs.urls }}" ]; then
-            # Dùng URLs nhập tay từ UI
             printf '%s' "${{ github.event.inputs.urls }}" > urls_run.txt
           elif [ -f urls.txt ]; then
-            # Dùng file urls.txt trong repo
             cp urls.txt urls_run.txt
           else
             echo "❌ Không có URLs! Tạo file urls.txt hoặc nhập URL khi chạy."
@@ -66,7 +71,7 @@ jobs:
 
       # 5. Khôi phục state từ cache (để resume)
       - name: Restore download state
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: state.json
           key: wattpad-state-${{ hashFiles('urls_run.txt') }}
@@ -82,12 +87,12 @@ jobs:
             --format "$FORMAT" \
             --output ./output \
             --state ./state.json
-        continue-on-error: true   # Tiếp tục dù có story lỗi
+        continue-on-error: true
 
       # 7. Lưu state để lần sau resume
       - name: Save download state
-        uses: actions/cache/save@v4
-        if: always()             # Lưu dù thành công hay thất bại
+        uses: actions/cache/save@v5
+        if: always()
         with:
           path: state.json
           key: wattpad-state-${{ hashFiles('urls_run.txt') }}
@@ -104,12 +109,26 @@ jobs:
             echo "Không có file nào được tạo."
           fi
 
-      # 9. Upload files để tải về
+      # 9. Sinh tên artifact: dùng input nếu có, không thì tự sinh
+      - name: Resolve artifact name
+        id: art
+        run: |
+          NAME="${{ github.event.inputs.artifact_name }}"
+          if [ -z "$NAME" ]; then
+            DATE=$(date '+%Y-%m-%d')
+            NAME="wattpad-ebooks_${DATE}_run-${{ github.run_number }}"
+          fi
+          # Sanitize: chỉ giữ chữ, số, dấu - và _
+          NAME=$(echo "$NAME" | tr -cs 'a-zA-Z0-9_-' '-' | sed 's/-*$//')
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "Artifact name: $NAME"
+
+      # 10. Upload files để tải về
       - name: Upload ebooks
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: ebooks-run-${{ github.run_number }}
+          name: ${{ steps.art.outputs.name }}
           path: output/
-          retention-days: 30     # Giữ 30 ngày
+          retention-days: 30
           if-no-files-found: warn
