@@ -181,6 +181,34 @@ textarea{min-height:90px;line-height:1.7}
 #toast.success{border-color:rgba(61,220,132,.4);color:var(--green)}
 #toast.error{border-color:rgba(255,71,87,.4);color:var(--red)}
 .divider{height:1px;background:var(--border);margin:16px 0}
+
+/* ERROR BLOCK */
+.err-block{background:rgba(255,71,87,.05);border:1px solid rgba(255,71,87,.25);border-radius:12px;overflow:hidden;animation:slideIn .2s ease}
+.err-block-hdr{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.err-icon{font-size:1rem;flex-shrink:0}
+.err-info{flex:1;min-width:0}
+.err-title{font-size:.82rem;font-weight:600;color:var(--red)}
+.err-url{font-family:var(--mono);font-size:.7rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.err-msg{font-family:var(--mono);font-size:.7rem;color:rgba(255,71,87,.7);margin-top:3px}
+.err-actions{display:flex;gap:6px;flex-shrink:0}
+.err-btn{font-family:var(--mono);font-size:.7rem;border-radius:6px;padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid}
+.err-btn-retry{background:rgba(255,211,42,.08);border-color:rgba(255,211,42,.3);color:var(--yellow)}
+.err-btn-retry:hover{background:rgba(255,211,42,.15)}
+.err-btn-edit{background:rgba(78,168,255,.08);border-color:rgba(78,168,255,.3);color:var(--blue)}
+.err-btn-edit:hover{background:rgba(78,168,255,.15)}
+.err-btn-del{background:rgba(255,71,87,.08);border-color:rgba(255,71,87,.25);color:var(--red)}
+.err-btn-del:hover{background:rgba(255,71,87,.15)}
+.err-edit-row{display:flex;gap:8px;padding:0 14px 12px;align-items:center}
+.err-edit-row input{flex:1;font-size:.78rem}
+.err-btn-confirm{padding:8px 12px;font-family:var(--mono);font-size:.72rem;background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap;transition:background .15s}
+.err-btn-confirm:hover{background:var(--accent2)}
+.err-loading{padding:10px 14px;font-family:var(--mono);font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+
+/* RETRY ALL banner */
+.retry-all-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(255,211,42,.06);border:1px solid rgba(255,211,42,.2);border-radius:10px;padding:10px 14px;margin-bottom:10px;gap:10px}
+.retry-all-msg{font-size:.78rem;color:var(--yellow);font-family:var(--mono)}
+.retry-all-btn{font-family:var(--mono);font-size:.72rem;background:rgba(255,211,42,.12);border:1px solid rgba(255,211,42,.3);color:var(--yellow);border-radius:6px;padding:5px 12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.retry-all-btn:hover{background:rgba(255,211,42,.22)}
 </style>
 </head>
 <body>
@@ -195,7 +223,7 @@ textarea{min-height:90px;line-height:1.7}
         <p>GitHub Actions · Server-side · Offline-ready</p>
       </div>
     </div>
-    <span class="version-badge">v1.2</span>
+    <span class="version-badge">v1.3</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -392,8 +420,13 @@ function extractStoryId(url){
 }
 
 // ════════════════════════════════════════
-// LOAD STORIES + CHAPTER PICKER
+// LOAD STORIES + CHAPTER PICKER  (v1.3)
 // ════════════════════════════════════════
+
+// Lưu trạng thái từng URL: 'loading'|'ok'|'error'
+// key = original URL (stable), value = { status, url, meta?, errMsg?, errCode? }
+const urlStates = new Map();
+
 async function loadStories(){
   const urls = parseUrls();
   if(!urls.length) return;
@@ -401,45 +434,85 @@ async function loadStories(){
   btn.disabled=true; btn.textContent='⏳ Đang tải...';
 
   const container = document.getElementById('storiesList');
-  container.style.display='flex'; container.innerHTML='';
+  container.style.display='flex';
 
-  // Khởi tạo placeholder cho từng URL
-  const storyIds = [];
+  // Thêm placeholder chỉ cho URL chưa có trong map
   for(const url of urls){
-    const sid = extractStoryIdFromUrl(url);
-    storyIds.push({url, sid});
-    container.insertAdjacentHTML('beforeend', renderStoryPlaceholder(sid||url));
+    if(!urlStates.has(url)){
+      urlStates.set(url, {status:'loading', url});
+    }
   }
 
-  // Fetch metadata song song
-  await Promise.all(storyIds.map(async ({url, sid}, idx)=>{
-    const el = container.children[idx];
-    try {
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.wattpad.com/api/v3/stories/${sid||extractStoryIdFallback(url)}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`)}`;
-      // Thử direct fetch trước (không cần CORS với Wattpad API JSON)
-      let meta;
-      try {
-        const res = await fetch(`https://www.wattpad.com/api/v3/stories/${sid||extractStoryIdFallback(url)}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`);
-        if(res.ok) meta = await res.json();
-      } catch {}
-      if(!meta){
-        const res = await fetch(proxyUrl);
-        if(res.ok){ const d=await res.json(); meta=JSON.parse(d.contents); }
-      }
-      if(!meta) throw new Error('Không lấy được metadata');
+  renderAllBlocks();
 
-      const realId = String(meta.id);
-      if(!S.stories.has(realId)){
-        S.stories.set(realId, { meta, selectedChapters: null }); // null = all
-      }
-      el.outerHTML = renderStoryBlock(meta);
-    } catch(e){
-      el.innerHTML = `<div style="padding:12px 14px;font-size:.8rem;color:var(--red)">⚠ Không load được: ${escHtml(url)}</div>`;
-    }
+  // Fetch song song chỉ những URL chưa ok
+  await Promise.all(urls.map(url => {
+    const st = urlStates.get(url);
+    if(st.status==='ok') return Promise.resolve();
+    return fetchStoryMeta_safe(url);
   }));
 
   btn.disabled=false; btn.textContent='🔍 Xem chapters';
+  renderAllBlocks();
   updateTriggerBtn();
+}
+
+async function fetchStoryMeta_safe(url){
+  urlStates.set(url, {status:'loading', url});
+  renderBlockForUrl(url);
+  try {
+    const sid = extractStoryIdFromUrl(url) || extractStoryIdFallback(url);
+    const apiUrl = `https://www.wattpad.com/api/v3/stories/${sid}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`;
+
+    let meta = null, lastErr = '', lastCode = 0;
+
+    // 1) Direct fetch
+    try {
+      const res = await fetch(apiUrl);
+      lastCode = res.status;
+      if(res.ok){
+        meta = await res.json();
+      } else {
+        lastErr = classifyHttpError(res.status);
+      }
+    } catch(e){ lastErr = 'Lỗi kết nối (CORS/mạng)'; }
+
+    // 2) Proxy fallback nếu direct thất bại
+    if(!meta){
+      try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+        const res2 = await fetch(proxyUrl);
+        if(res2.ok){
+          const d = await res2.json();
+          if(d.contents){ meta = JSON.parse(d.contents); lastErr=''; }
+          else lastErr = lastErr || 'Proxy trả về rỗng';
+        } else {
+          lastErr = lastErr || `Proxy lỗi ${res2.status}`;
+        }
+      } catch(e){ lastErr = lastErr || 'Proxy timeout / không phản hồi'; }
+    }
+
+    if(!meta) throw {msg: lastErr||'Không lấy được metadata', code: lastCode};
+
+    // Validate: story tồn tại nhưng bị khoá → parts rỗng không phải lỗi
+    const realId = String(meta.id);
+    S.stories.set(realId, { meta, selectedChapters: null });
+    urlStates.set(url, {status:'ok', url, meta});
+
+  } catch(e){
+    const msg = e.msg || e.message || 'Lỗi không xác định';
+    const code = e.code || 0;
+    urlStates.set(url, {status:'error', url, errMsg: msg, errCode: code});
+  }
+  renderBlockForUrl(url);
+}
+
+function classifyHttpError(status){
+  if(status===404) return 'Story không tồn tại hoặc đã bị xoá (404)';
+  if(status===403) return 'Story bị khoá hoặc cần đăng nhập (403)';
+  if(status===429) return 'Quá nhiều request, thử lại sau (429)';
+  if(status>=500)  return `Server Wattpad lỗi (${status})`;
+  return `HTTP ${status}`;
 }
 
 function extractStoryIdFromUrl(url){
@@ -451,12 +524,145 @@ function extractStoryIdFallback(url){
   return m ? m[1] : '0';
 }
 
-function renderStoryPlaceholder(label){
-  return `<div class="story-block"><div class="story-loading"><span class="spinner-sm" style="color:var(--muted)"></span> Đang tải ${escHtml(String(label))}...</div></div>`;
+// Render toàn bộ list (dùng khi init / reload)
+function renderAllBlocks(){
+  const container = document.getElementById('storiesList');
+  container.style.display='flex';
+  const urls = parseUrls();
+  // Xoá block không còn trong URL list
+  for(const [u] of urlStates){
+    if(!urls.includes(u)) urlStates.delete(u);
+  }
+  container.innerHTML = '';
+  // Retry-all bar nếu có lỗi
+  const errCount = [...urlStates.values()].filter(s=>s.status==='error').length;
+  if(errCount>1){
+    container.insertAdjacentHTML('beforeend',
+      `<div class="retry-all-bar">
+        <span class="retry-all-msg">⚠ ${errCount} URL không load được</span>
+        <button class="retry-all-btn" onclick="retryAllErrors()">↻ Thử lại tất cả</button>
+      </div>`);
+  }
+  for(const url of urls){
+    const st = urlStates.get(url);
+    if(!st){ container.insertAdjacentHTML('beforeend', renderLoadingBlock(url)); continue; }
+    container.insertAdjacentHTML('beforeend', renderBlock(st));
+  }
 }
+
+// Render chỉ 1 block theo URL (dùng khi fetch xong 1 story)
+function renderBlockForUrl(url){
+  const container = document.getElementById('storiesList');
+  const st = urlStates.get(url);
+  if(!st) return;
+  // Tìm block hiện có và replace
+  const existing = container.querySelector(`[data-url="${CSS.escape(url)}"]`);
+  const newHtml = renderBlock(st);
+  if(existing){ existing.outerHTML = newHtml; }
+  else { container.insertAdjacentHTML('beforeend', newHtml); }
+}
+
+function renderBlock(st){
+  if(st.status==='loading') return renderLoadingBlock(st.url);
+  if(st.status==='error')   return renderErrorBlock(st);
+  return renderStoryBlock(st.meta);
+}
+
+function renderLoadingBlock(url){
+  return `<div class="story-block" data-url="${escAttr(url)}">
+    <div class="story-loading"><span class="spinner-sm" style="color:var(--muted)"></span> Đang tải ${escHtml(url.replace('https://www.wattpad.com/story/',''))}...</div>
+  </div>`;
+}
+
+function renderErrorBlock(st){
+  const safeUrl = escAttr(st.url);
+  const dispUrl = st.url.replace('https://www.wattpad.com/','');
+  return `<div class="err-block" data-url="${safeUrl}" id="eb-${safeUrl}">
+    <div class="err-block-hdr">
+      <div class="err-icon">⚠️</div>
+      <div class="err-info">
+        <div class="err-title">Không load được</div>
+        <div class="err-url" title="${escHtml(st.url)}">${escHtml(dispUrl)}</div>
+        ${st.errMsg ? `<div class="err-msg">${escHtml(st.errMsg)}</div>` : ''}
+      </div>
+      <div class="err-actions">
+        <button class="err-btn err-btn-retry" onclick="retryUrl(${JSON.stringify(st.url)})">↻ Thử lại</button>
+        <button class="err-btn err-btn-edit"  onclick="editUrl(this,${JSON.stringify(st.url)})">✎ Sửa URL</button>
+        <button class="err-btn err-btn-del"   onclick="deleteUrl(${JSON.stringify(st.url)})">✕</button>
+      </div>
+    </div>
+    <div class="err-edit-row" id="edit-row-${safeUrl}" style="display:none">
+      <input type="text" id="edit-inp-${safeUrl}" value="${escHtml(st.url)}" placeholder="https://www.wattpad.com/story/..."/>
+      <button class="err-btn-confirm" onclick="confirmEditUrl(${JSON.stringify(st.url)})">✓ Tải lại</button>
+    </div>
+  </div>`;
+}
+
+// ── Error block actions ──
+async function retryUrl(url){
+  urlStates.set(url, {status:'loading', url});
+  renderBlockForUrl(url);
+  await fetchStoryMeta_safe(url);
+  updateRetryAllBar();
+  updateTriggerBtn();
+}
+
+function editUrl(btn, url){
+  const safeUrl = escAttr(url);
+  const row = document.getElementById('edit-row-'+safeUrl);
+  if(!row) return;
+  const isOpen = row.style.display !== 'none';
+  row.style.display = isOpen ? 'none' : 'flex';
+  if(!isOpen) document.getElementById('edit-inp-'+safeUrl)?.focus();
+}
+
+async function confirmEditUrl(oldUrl){
+  const safeUrl = escAttr(oldUrl);
+  const inp = document.getElementById('edit-inp-'+safeUrl);
+  if(!inp) return;
+  const newUrl = inp.value.trim();
+  if(!newUrl || !newUrl.includes('wattpad.com')){ toast('URL không hợp lệ','error'); return; }
+
+  // Cập nhật textarea URLs
+  const ta = document.getElementById('inUrls');
+  ta.value = ta.value.split('\n').map(l => l.trim()===oldUrl ? newUrl : l).join('\n');
+
+  // Chuyển state từ URL cũ sang URL mới
+  urlStates.delete(oldUrl);
+  urlStates.set(newUrl, {status:'loading', url:newUrl});
+  onUrlsChange();
+  renderAllBlocks();
+  await fetchStoryMeta_safe(newUrl);
+  updateRetryAllBar();
+  updateTriggerBtn();
+}
+
+function deleteUrl(url){
+  const ta = document.getElementById('inUrls');
+  ta.value = ta.value.split('\n').filter(l=>l.trim()!==url).join('\n');
+  urlStates.delete(url);
+  onUrlsChange();
+  renderAllBlocks();
+  updateTriggerBtn();
+}
+
+async function retryAllErrors(){
+  const errUrls = [...urlStates.values()].filter(s=>s.status==='error').map(s=>s.url);
+  await Promise.all(errUrls.map(url=>fetchStoryMeta_safe(url)));
+  renderAllBlocks();
+  updateTriggerBtn();
+}
+
+function updateRetryAllBar(){
+  renderAllBlocks(); // đơn giản nhất: re-render toàn bộ
+}
+
+function escAttr(s){ return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function renderStoryBlock(meta){
   const sid = String(meta.id);
+  // Tìm URL gốc từ urlStates
+  const origUrl = [...urlStates.entries()].find(([,v])=>v.status==='ok'&&String(v.meta?.id)===sid)?.[0] || '';
   const parts = meta.parts||[];
   const coverHtml = meta.cover
     ? `<img class="story-cover" src="${meta.cover}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" alt=""/><div class="story-cover-ph" style="display:none">📖</div>`
@@ -469,7 +675,7 @@ function renderStoryBlock(meta){
       <div class="ch-words">${p.wordCount?Math.round(p.wordCount/1000)+'k':'—'}</div>
     </div>`).join('');
 
-  return `<div class="story-block loaded open" id="sb-${sid}">
+  return `<div class="story-block loaded open" id="sb-${sid}" data-url="${escAttr(origUrl)}">
     <div class="story-block-hdr" onclick="toggleStoryBlock('${sid}')">
       ${coverHtml}
       <div class="story-info">
