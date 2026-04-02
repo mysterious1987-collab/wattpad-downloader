@@ -1,0 +1,64 @@
+name: Wattpad Downloader
+
+on:
+  # Chạy thủ công từ GitHub UI
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Output format'
+        required: true
+        default: 'epub'
+        type: choice
+        options: [epub, txt, md, json]
+      urls:
+        description: 'URLs (mỗi dòng 1, để trống = dùng urls.txt)'
+        required: false
+
+  # Hoặc tự động mỗi ngày lúc 2h sáng (tuỳ chọn)
+  # schedule:
+  #   - cron: '0 19 * * *'  # 19h UTC = 2h sáng GMT+7
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300  # tối đa 5 tiếng
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare URLs
+        run: |
+          if [ -n "${{ github.event.inputs.urls }}" ]; then
+            echo "${{ github.event.inputs.urls }}" > urls_run.txt
+          else
+            cp urls.txt urls_run.txt
+          fi
+          echo "=== URLs sẽ tải ==="
+          cat urls_run.txt
+
+      - name: Download stories
+        run: |
+          FORMAT="${{ github.event.inputs.format || 'epub' }}"
+          node wattpad.js --batch urls_run.txt --format $FORMAT --output ./output
+        continue-on-error: true  # tiếp tục dù có story lỗi
+
+      - name: Show results
+        run: |
+          echo "=== Files đã tạo ==="
+          ls -lh output/ 2>/dev/null || echo "Không có file nào"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebooks-${{ github.run_number }}
+          path: output/
+          retention-days: 30  # giữ 30 ngày
