@@ -1,7 +1,6 @@
 name: Wattpad Downloader
 
 on:
-  # ── Chạy thủ công từ GitHub UI hoặc từ UI trang web ────────
   workflow_dispatch:
     inputs:
       format:
@@ -24,35 +23,35 @@ on:
         type: string
 
       artifact_name:
-        description: 'Tên artifact khi tải về (để trống = tự sinh)'
+        description: 'Tên artifact (để trống = tự sinh)'
         required: false
         type: string
 
-  # ── Tự động mỗi ngày (bỏ comment # để bật) ─────────────────
+      chapters_map:
+        description: 'Chapter map JSON — sinh tự động từ UI, không cần nhập tay'
+        required: false
+        type: string
+
   # schedule:
-  #   - cron: '0 19 * * *'   # 19:00 UTC = 02:00 sáng GMT+7
+  #   - cron: '0 19 * * *'
 
 jobs:
   download:
     runs-on: ubuntu-latest
-    timeout-minutes: 300      # tối đa 5 tiếng
+    timeout-minutes: 300
 
     steps:
-      # 1. Lấy code từ repo
       - name: Checkout
         uses: actions/checkout@v5
 
-      # 2. Cài Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      # 3. Cài dependencies
       - name: Install dependencies
         run: npm install --no-package-lock
 
-      # 4. Chuẩn bị danh sách URL
       - name: Prepare URLs
         run: |
           if [ -n "${{ github.event.inputs.urls }}" ]; then
@@ -60,16 +59,14 @@ jobs:
           elif [ -f urls.txt ]; then
             cp urls.txt urls_run.txt
           else
-            echo "❌ Không có URLs! Tạo file urls.txt hoặc nhập URL khi chạy."
+            echo "❌ Không có URLs!"
             exit 1
           fi
-
           echo "=== URLs sẽ tải ==="
           cat urls_run.txt
           echo ""
           echo "Tổng: $(grep -c 'wattpad' urls_run.txt || echo 0) URL"
 
-      # 5. Khôi phục state từ cache (để resume)
       - name: Restore download state
         uses: actions/cache@v5
         with:
@@ -78,18 +75,20 @@ jobs:
           restore-keys: |
             wattpad-state-
 
-      # 6. Chạy download
       - name: Download stories
         run: |
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
-          node wattpad.js \
-            --batch urls_run.txt \
-            --format "$FORMAT" \
-            --output ./output \
-            --state ./state.json
+          CHAPTERS_MAP="${{ github.event.inputs.chapters_map }}"
+
+          CMD="node wattpad.js --batch urls_run.txt --format \"$FORMAT\" --output ./output --state ./state.json"
+
+          if [ -n "$CHAPTERS_MAP" ]; then
+            CMD="$CMD --chapters-map '$CHAPTERS_MAP'"
+          fi
+
+          eval $CMD
         continue-on-error: true
 
-      # 7. Lưu state để lần sau resume
       - name: Save download state
         uses: actions/cache/save@v5
         if: always()
@@ -97,19 +96,16 @@ jobs:
           path: state.json
           key: wattpad-state-${{ hashFiles('urls_run.txt') }}
 
-      # 8. Xem kết quả
       - name: List output files
         run: |
           echo "=== Files đã tạo ==="
           if [ -d output ] && [ "$(ls -A output)" ]; then
             ls -lh output/
-            echo ""
-            echo "Tổng dung lượng: $(du -sh output/ | cut -f1)"
+            echo "Tổng: $(du -sh output/ | cut -f1)"
           else
-            echo "Không có file nào được tạo."
+            echo "Không có file nào."
           fi
 
-      # 9. Sinh tên artifact: dùng input nếu có, không thì tự sinh
       - name: Resolve artifact name
         id: art
         run: |
@@ -118,12 +114,10 @@ jobs:
             DATE=$(date '+%Y-%m-%d')
             NAME="wattpad-ebooks_${DATE}_run-${{ github.run_number }}"
           fi
-          # Sanitize: chỉ giữ chữ, số, dấu - và _
           NAME=$(echo "$NAME" | tr -cs 'a-zA-Z0-9_-' '-' | sed 's/-*$//')
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "Artifact name: $NAME"
 
-      # 10. Upload files để tải về
       - name: Upload ebooks
         uses: actions/upload-artifact@v5
         if: always()
