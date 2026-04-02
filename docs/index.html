@@ -1,1 +1,920 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wattpad Downloader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  /* ── RESET & BASE ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  :root {
+    --bg:        #0d0f12;
+    --surface:   #141720;
+    --surface2:  #1c2030;
+    --border:    #2a2f3f;
+    --border2:   #353c50;
+    --accent:    #ff6b35;
+    --accent2:   #ff9a6c;
+    --green:     #3ddc84;
+    --red:       #ff4757;
+    --yellow:    #ffd32a;
+    --text:      #e8ecf4;
+    --muted:     #6b7590;
+    --muted2:    #9099b0;
+    --mono:      'Space Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+  }
+
+  html { font-size: 15px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── NOISE TEXTURE overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: .4;
+  }
+
+  /* ── LAYOUT ── */
+  .shell {
+    position: relative; z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    margin-bottom: 40px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px;
+  }
+  .logo-block { display: flex; align-items: center; gap: 14px; }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    box-shadow: 0 0 24px rgba(255,107,53,.35);
+  }
+  .logo-text h1 {
+    font-family: var(--mono);
+    font-size: 1.15rem;
+    letter-spacing: -.5px;
+    color: var(--text);
+  }
+  .logo-text p {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+  .version-badge {
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--accent);
+    background: rgba(255,107,53,.12);
+    border: 1px solid rgba(255,107,53,.25);
+    padding: 3px 8px;
+    border-radius: 4px;
+    align-self: flex-start;
+    margin-top: 4px;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 16px;
+    transition: border-color .2s;
+  }
+  .card:focus-within { border-color: var(--border2); }
+
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .card-title {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono);
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted2);
+  }
+  .card-title span { font-size: 1rem; }
+  .chevron {
+    color: var(--muted);
+    font-size: .75rem;
+    transition: transform .25s;
+  }
+  .collapsed .chevron { transform: rotate(-90deg); }
+  .collapsible-body { overflow: hidden; transition: max-height .3s ease; }
+  .collapsed .collapsible-body { max-height: 0 !important; }
+
+  /* ── FORM ELEMENTS ── */
+  label {
+    display: block;
+    font-size: .8rem;
+    color: var(--muted2);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  input[type=text], input[type=password], textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: .82rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+    resize: none;
+  }
+  input[type=text]:focus, input[type=password]:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255,107,53,.12);
+  }
+  textarea { min-height: 100px; line-height: 1.7; }
+
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 500px) { .field-row { grid-template-columns: 1fr; } }
+
+  .hint {
+    font-size: .75rem;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+  .hint a { color: var(--accent2); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+
+  /* ── FORMAT CHECKBOXES ── */
+  .format-grid {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .fmt-label {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: .8rem;
+    color: var(--muted2);
+    transition: all .15s;
+    user-select: none;
+  }
+  .fmt-label:hover { border-color: var(--border2); color: var(--text); }
+  .fmt-label input { display: none; }
+  .fmt-label.checked {
+    background: rgba(255,107,53,.1);
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+  .fmt-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--border2);
+    transition: background .15s;
+  }
+  .fmt-label.checked .fmt-dot { background: var(--accent); }
+
+  /* ── ARTIFACT NAME ── */
+  .name-row {
+    display: flex; align-items: center; gap: 8px;
+    position: relative;
+  }
+  .name-row input { flex: 1; }
+  .name-suggest-btn {
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted2);
+    cursor: pointer;
+    font-size: .85rem;
+    transition: all .15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .name-suggest-btn:hover { border-color: var(--border2); color: var(--text); }
+
+  /* ── PAT VISIBILITY ── */
+  .pat-row { position: relative; }
+  .pat-row input { padding-right: 44px; }
+  .pat-eye {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 1rem;
+    padding: 4px;
+  }
+  .pat-eye:hover { color: var(--text); }
+
+  /* ── STATUS INDICATOR ── */
+  .setup-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .75rem;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.bad { background: var(--red); }
+
+  /* ── BUTTON ── */
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: .9rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 20px;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent2);
+    box-shadow: 0 4px 24px rgba(255,107,53,.4);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+  .btn-sm {
+    background: var(--surface2);
+    color: var(--muted2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: .75rem;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-sm:hover { border-color: var(--border2); color: var(--text); }
+
+  /* ── RUNS LIST ── */
+  .runs-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .poll-indicator {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .72rem;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .poll-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .poll-dot.active {
+    background: var(--green);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+  }
+
+  .run-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: border-color .2s;
+    animation: slideIn .25s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .run-item:hover { border-color: var(--border2); }
+
+  .run-status-icon { font-size: 1.1rem; flex-shrink: 0; width: 20px; text-align: center; }
+  .run-info { flex: 1; min-width: 0; }
+  .run-name {
+    font-size: .85rem;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .run-meta {
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--muted);
+    margin-top: 2px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .run-badge {
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: .68rem;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .badge-running { background: rgba(255,211,42,.12); color: var(--yellow); border: 1px solid rgba(255,211,42,.25); }
+  .badge-success { background: rgba(61,220,132,.12); color: var(--green);  border: 1px solid rgba(61,220,132,.25); }
+  .badge-failure { background: rgba(255,71,87,.12);  color: var(--red);    border: 1px solid rgba(255,71,87,.25); }
+  .badge-queued  { background: rgba(107,117,144,.12); color: var(--muted2); border: 1px solid rgba(107,117,144,.25); }
+
+  .run-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .run-link {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--muted2);
+    text-decoration: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .run-link:hover { border-color: var(--accent); color: var(--accent2); }
+  .run-link.primary-link {
+    background: rgba(255,107,53,.1);
+    border-color: rgba(255,107,53,.3);
+    color: var(--accent2);
+  }
+
+  .empty-runs {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: .85rem;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: .82rem;
+    font-family: var(--mono);
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    max-width: 400px;
+    text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  #toast.success { border-color: rgba(61,220,132,.4); color: var(--green); }
+  #toast.error   { border-color: rgba(255,71,87,.4);  color: var(--red);   }
+
+  /* ── SPINNER ── */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  /* ── SETUP GUIDE ── */
+  .guide-steps {
+    counter-reset: step;
+  }
+  .guide-step {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 12px;
+    font-size: .82rem;
+    color: var(--muted2);
+  }
+  .guide-step::before {
+    counter-increment: step;
+    content: counter(step);
+    width: 20px; height: 20px; flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--muted2);
+    margin-top: 1px;
+  }
+  .guide-step code {
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--accent2);
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-block">
+      <div class="logo-icon">📚</div>
+      <div class="logo-text">
+        <h1>Wattpad Downloader</h1>
+        <p>GitHub Actions · Server-side · Offline-ready</p>
+      </div>
+    </div>
+    <span class="version-badge">v2.0</span>
+  </header>
+
+  <!-- SETUP CARD -->
+  <div class="card" id="setupCard">
+    <div class="card-header" onclick="toggleCard('setupCard')">
+      <div class="card-title"><span>🔑</span> CÀI ĐẶT KẾT NỐI</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="setup-status" id="setupStatus">
+          <div class="dot" id="setupDot"></div>
+          <span id="setupStatusText">Chưa cấu hình</span>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+    </div>
+    <div class="collapsible-body" id="setupBody" style="max-height:600px">
+
+      <!-- Guide -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
+        <div style="font-family:var(--mono);font-size:.72rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Hướng dẫn tạo PAT (làm 1 lần)</div>
+        <div class="guide-steps">
+          <div class="guide-step">GitHub → <b style="color:var(--text)">Settings</b> → <b style="color:var(--text)">Developer settings</b> → <b style="color:var(--text)">Personal access tokens</b> → <b style="color:var(--text)">Fine-grained tokens</b></div>
+          <div class="guide-step">Bấm <b style="color:var(--text)">Generate new token</b> → Đặt tên tuỳ ý</div>
+          <div class="guide-step"><b style="color:var(--text)">Repository access</b>: chọn đúng repo wattpad-downloader</div>
+          <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> · <code>Contents → Read</code></div>
+          <div class="guide-step">Copy token → paste vào ô bên dưới</div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>GitHub Username</label>
+          <input type="text" id="inOwner" placeholder="your-username" oninput="onSetupChange()"/>
+        </div>
+        <div class="field">
+          <label>Repo Name</label>
+          <input type="text" id="inRepo" placeholder="wattpad-downloader" oninput="onSetupChange()"/>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Personal Access Token (PAT)</label>
+        <div class="pat-row">
+          <input type="password" id="inPat" placeholder="github_pat_..." oninput="onSetupChange()"/>
+          <button class="pat-eye" onclick="togglePat()" id="patEyeBtn" title="Hiện/ẩn token">👁</button>
+        </div>
+        <div class="hint">Token lưu trong localStorage trình duyệt, không gửi đi đâu ngoài api.github.com</div>
+      </div>
+
+      <button class="btn-sm" onclick="saveSetup()" style="width:100%;padding:10px">Lưu cài đặt</button>
+    </div>
+  </div>
+
+  <!-- DOWNLOAD CARD -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:18px"><span>⬇️</span> YÊU CẦU TẢI</div>
+
+    <div class="field">
+      <label>URLs Wattpad <span style="color:var(--muted)">(mỗi dòng 1 URL)</span></label>
+      <textarea id="inUrls" placeholder="https://www.wattpad.com/story/123456-ten-truyen&#10;https://www.wattpad.com/story/789012-truyen-khac" oninput="onUrlsChange()"></textarea>
+      <div class="hint" id="urlCount">Nhập URL để bắt đầu</div>
+    </div>
+
+    <div class="field">
+      <label>Format xuất</label>
+      <div class="format-grid" id="formatGrid">
+        <label class="fmt-label checked" onclick="toggleFmt(this,'epub')">
+          <input type="checkbox" checked/><div class="fmt-dot"></div>EPUB
+        </label>
+        <label class="fmt-label" onclick="toggleFmt(this,'txt')">
+          <input type="checkbox"/><div class="fmt-dot"></div>TXT
+        </label>
+        <label class="fmt-label" onclick="toggleFmt(this,'md')">
+          <input type="checkbox"/><div class="fmt-dot"></div>Markdown
+        </label>
+        <label class="fmt-label" onclick="toggleFmt(this,'json')">
+          <input type="checkbox"/><div class="fmt-dot"></div>JSON
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tên artifact <span style="color:var(--muted)">(để trống = tự sinh)</span></label>
+      <div class="name-row">
+        <input type="text" id="inArtifactName" placeholder="ten-truyen_2026-04-02"/>
+        <button class="name-suggest-btn" onclick="suggestName()" title="Tự sinh tên từ URL">✨ Gợi ý</button>
+      </div>
+      <div class="hint" id="nameHint">Tên dùng khi tải file từ Artifacts</div>
+    </div>
+
+    <button class="btn-primary" id="btnTrigger" onclick="triggerWorkflow()" disabled>
+      <span id="btnIcon">🚀</span>
+      <span id="btnText">Bắt đầu tải</span>
+    </button>
+  </div>
+
+  <!-- RUNS CARD -->
+  <div class="card">
+    <div class="runs-header">
+      <div class="card-title"><span>📊</span> LỊCH SỬ CHẠY</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="poll-indicator">
+          <div class="poll-dot" id="pollDot"></div>
+          <span id="pollText">—</span>
+        </div>
+        <button class="btn-sm" onclick="loadRuns()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="runsList">
+      <div class="empty-runs">Lưu cài đặt để xem lịch sử chạy</div>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+const S = {
+  owner: '', repo: '', pat: '',
+  formats: new Set(['epub']),
+  pollInterval: null,
+  polling: false,
+};
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+(function init() {
+  S.owner = localStorage.getItem('wp_owner') || '';
+  S.repo  = localStorage.getItem('wp_repo')  || 'wattpad-downloader';
+  S.pat   = localStorage.getItem('wp_pat')   || '';
+
+  document.getElementById('inOwner').value = S.owner;
+  document.getElementById('inRepo').value  = S.repo;
+  document.getElementById('inPat').value   = S.pat;
+
+  updateSetupStatus();
+  updateTriggerBtn();
+
+  if (S.owner && S.repo && S.pat) {
+    collapseCard('setupCard');
+    loadRuns();
+    startPolling();
+  }
+})();
+
+// ══════════════════════════════════════════
+// CARD COLLAPSE
+// ══════════════════════════════════════════
+function toggleCard(id) {
+  const card = document.getElementById(id);
+  const body = document.getElementById(id.replace('Card','Body'));
+  if (!body) return;
+  card.classList.toggle('collapsed');
+  if (!card.classList.contains('collapsed')) {
+    body.style.maxHeight = body.scrollHeight + 'px';
+  } else {
+    body.style.maxHeight = '0';
+  }
+}
+function collapseCard(id) {
+  const card = document.getElementById(id);
+  const body = document.getElementById(id.replace('Card','Body'));
+  if (!body) return;
+  card.classList.add('collapsed');
+  body.style.maxHeight = '0';
+}
+
+// ══════════════════════════════════════════
+// SETUP
+// ══════════════════════════════════════════
+function onSetupChange() { updateSetupStatus(); updateTriggerBtn(); }
+
+function updateSetupStatus() {
+  const o = document.getElementById('inOwner').value.trim();
+  const r = document.getElementById('inRepo').value.trim();
+  const p = document.getElementById('inPat').value.trim();
+  const ok = o && r && p;
+  document.getElementById('setupDot').className = 'dot ' + (ok ? 'ok' : 'bad');
+  document.getElementById('setupStatusText').textContent = ok ? 'Đã cấu hình' : 'Chưa đầy đủ';
+}
+
+function saveSetup() {
+  const o = document.getElementById('inOwner').value.trim();
+  const r = document.getElementById('inRepo').value.trim();
+  const p = document.getElementById('inPat').value.trim();
+  if (!o || !r || !p) { toast('Điền đầy đủ username, repo và PAT', 'error'); return; }
+  localStorage.setItem('wp_owner', o);
+  localStorage.setItem('wp_repo',  r);
+  localStorage.setItem('wp_pat',   p);
+  S.owner = o; S.repo = r; S.pat = p;
+  updateSetupStatus();
+  updateTriggerBtn();
+  toast('Đã lưu cài đặt ✓', 'success');
+  collapseCard('setupCard');
+  loadRuns();
+  startPolling();
+}
+
+function togglePat() {
+  const inp = document.getElementById('inPat');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ══════════════════════════════════════════
+// FORMAT
+// ══════════════════════════════════════════
+function toggleFmt(label, fmt) {
+  S.formats.has(fmt) ? S.formats.delete(fmt) : S.formats.add(fmt);
+  label.classList.toggle('checked', S.formats.has(fmt));
+  label.querySelector('input').checked = S.formats.has(fmt);
+  updateTriggerBtn();
+}
+
+// ══════════════════════════════════════════
+// URLS
+// ══════════════════════════════════════════
+function onUrlsChange() {
+  const urls = parseUrls();
+  const el = document.getElementById('urlCount');
+  if (urls.length === 0) {
+    el.textContent = 'Nhập URL để bắt đầu';
+  } else {
+    el.textContent = `${urls.length} URL hợp lệ`;
+    el.style.color = 'var(--green)';
+  }
+  updateTriggerBtn();
+}
+
+function parseUrls() {
+  return document.getElementById('inUrls').value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && l.includes('wattpad.com'));
+}
+
+// ══════════════════════════════════════════
+// ARTIFACT NAME SUGGEST
+// ══════════════════════════════════════════
+function suggestName() {
+  const urls = parseUrls();
+  const date = new Date().toISOString().slice(0,10);
+  let name = '';
+  if (urls.length === 0) {
+    name = `wattpad_${date}`;
+  } else if (urls.length === 1) {
+    const m = urls[0].match(/story\/\d+-([^/?]+)/);
+    const slug = m ? m[1].replace(/-/g,' ').slice(0,40).trim().replace(/\s+/g,'-') : 'story';
+    name = `${slug}_${date}`;
+  } else {
+    name = `batch-${urls.length}-stories_${date}`;
+  }
+  document.getElementById('inArtifactName').value = name;
+  document.getElementById('nameHint').textContent = `✨ Tên tự sinh từ ${urls.length} URL`;
+}
+
+// ══════════════════════════════════════════
+// TRIGGER
+// ══════════════════════════════════════════
+function updateTriggerBtn() {
+  const ready = S.owner && S.repo && S.pat && parseUrls().length > 0 && S.formats.size > 0;
+  document.getElementById('btnTrigger').disabled = !ready;
+}
+
+async function triggerWorkflow() {
+  const urls    = parseUrls();
+  const fmtStr  = [...S.formats].join(',');
+  let   artName = document.getElementById('inArtifactName').value.trim();
+  if (!artName) {
+    suggestName();
+    artName = document.getElementById('inArtifactName').value.trim();
+  }
+
+  setBtnLoading(true);
+
+  try {
+    const body = {
+      ref: 'main',
+      inputs: {
+        format: fmtStr,
+        urls:   urls.join('\n'),
+        artifact_name: artName,
+      }
+    };
+
+    const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`, {
+      method: 'POST',
+      body:   JSON.stringify(body),
+    });
+
+    if (res.status === 204) {
+      toast('🚀 Đã kích hoạt! Đang chờ GitHub khởi động...', 'success');
+      document.getElementById('inUrls').value = '';
+      onUrlsChange();
+      setTimeout(loadRuns, 3000);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast(`Lỗi ${res.status}: ${err.message || 'Không thể trigger workflow'}`, 'error');
+    }
+  } catch (e) {
+    toast(`Lỗi kết nối: ${e.message}`, 'error');
+  } finally {
+    setBtnLoading(false);
+  }
+}
+
+function setBtnLoading(on) {
+  document.getElementById('btnIcon').innerHTML = on ? '<span class="spinner"></span>' : '🚀';
+  document.getElementById('btnText').textContent = on ? 'Đang gửi...' : 'Bắt đầu tải';
+  document.getElementById('btnTrigger').disabled = on;
+}
+
+// ══════════════════════════════════════════
+// RUNS — LOAD & RENDER
+// ══════════════════════════════════════════
+async function loadRuns() {
+  if (!S.owner || !S.repo || !S.pat) return;
+  try {
+    const res  = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/runs?per_page=8`);
+    if (!res.ok) { renderRuns([]); return; }
+    const data = await res.json();
+    renderRuns(data.workflow_runs || []);
+    maybeAdjustPolling(data.workflow_runs || []);
+  } catch { /* silent */ }
+}
+
+function renderRuns(runs) {
+  const el = document.getElementById('runsList');
+  if (!runs.length) {
+    el.innerHTML = '<div class="empty-runs">Chưa có lần chạy nào<br><span style="font-size:.75rem">Nhập URL và bấm "Bắt đầu tải" để bắt đầu</span></div>';
+    return;
+  }
+
+  el.innerHTML = runs.map(run => {
+    const { icon, badge, badgeClass } = runStatus(run);
+    const time = relativeTime(run.created_at);
+    const dur  = run.status === 'completed' ? duration(run.created_at, run.updated_at) : '';
+    const artName = run.name || `Run #${run.run_number}`;
+
+    const artifactBtn = run.conclusion === 'success'
+      ? `<a class="run-link primary-link" href="${run.html_url}#artifacts" target="_blank">⬇ Tải về</a>`
+      : '';
+
+    return `<div class="run-item">
+      <div class="run-status-icon">${icon}</div>
+      <div class="run-info">
+        <div class="run-name">#${run.run_number} — ${escHtml(run.display_title || run.head_commit?.message || 'Wattpad Download')}</div>
+        <div class="run-meta">
+          <span class="run-badge ${badgeClass}">${badge}</span>
+          <span>${time}</span>
+          ${dur ? `<span>${dur}</span>` : ''}
+        </div>
+      </div>
+      <div class="run-actions">
+        ${artifactBtn}
+        <a class="run-link" href="${run.html_url}" target="_blank">Logs</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function runStatus(run) {
+  if (run.status === 'queued' || run.status === 'waiting')
+    return { icon: '⏸', badge: 'QUEUED',  badgeClass: 'badge-queued' };
+  if (run.status === 'in_progress')
+    return { icon: '⚡', badge: 'RUNNING', badgeClass: 'badge-running' };
+  if (run.conclusion === 'success')
+    return { icon: '✅', badge: 'SUCCESS', badgeClass: 'badge-success' };
+  if (run.conclusion === 'failure')
+    return { icon: '❌', badge: 'FAILED',  badgeClass: 'badge-failure' };
+  return { icon: '◌', badge: run.status?.toUpperCase() || '—', badgeClass: 'badge-queued' };
+}
+
+function maybeAdjustPolling(runs) {
+  const hasActive = runs.some(r => r.status === 'in_progress' || r.status === 'queued' || r.status === 'waiting');
+  if (hasActive) {
+    setPollActive(true);
+    if (!S.pollInterval) startPolling();
+  } else {
+    setPollActive(false);
+    if (S.pollInterval && !runs.some(r => r.status !== 'completed')) {
+      // nothing active, slow down
+    }
+  }
+}
+
+// ══════════════════════════════════════════
+// POLLING
+// ══════════════════════════════════════════
+function startPolling() {
+  if (S.pollInterval) clearInterval(S.pollInterval);
+  S.pollInterval = setInterval(loadRuns, 15000);
+  setPollActive(false);
+}
+
+function setPollActive(active) {
+  document.getElementById('pollDot').className = 'poll-dot' + (active ? ' active' : '');
+  document.getElementById('pollText').textContent = active ? 'Auto-refresh 15s' : 'Idle';
+}
+
+// ══════════════════════════════════════════
+// GITHUB API
+// ══════════════════════════════════════════
+function ghApi(path, opts = {}) {
+  return fetch(`https://api.github.com${path}`, {
+    ...opts,
+    headers: {
+      'Authorization': `Bearer ${S.pat}`,
+      'Accept':        'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type':  'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function relativeTime(iso) {
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60)    return `${Math.floor(diff)}s trước`;
+  if (diff < 3600)  return `${Math.floor(diff/60)}m trước`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h trước`;
+  return `${Math.floor(diff/86400)}d trước`;
+}
+
+function duration(start, end) {
+  const s = Math.floor((new Date(end) - new Date(start)) / 1000);
+  if (s < 60)  return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+</script>
+</body>
+</html>
