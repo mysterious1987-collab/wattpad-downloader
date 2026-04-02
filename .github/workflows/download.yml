@@ -39,12 +39,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ''
 
       # 3. Cài dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock
 
       # 4. Chuẩn bị danh sách URL
       - name: Prepare URLs
