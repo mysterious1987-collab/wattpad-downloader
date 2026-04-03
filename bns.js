@@ -310,12 +310,41 @@ function normalizeStoryUrl(u) {
   return `${BASE}/reader/${m[1]}`;
 }
 
-function parseTocAll(html) {
+/**
+ * Lấy inner HTML của thẻ <div id="..."> cân bằng độ sâu (cho #noidung lồng div).
+ */
+function extractDivInnerById(html, id) {
+  const esc = String(id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const openRe = new RegExp(`<div\\b[^>]*\\bid\\s*=\\s*["']${esc}["'][^>]*>`, "i");
+  const m = openRe.exec(html);
+  if (!m) return "";
+  const lc = html.toLowerCase();
+  let pos = m.index + m[0].length;
+  let depth = 1;
+  while (pos < html.length && depth > 0) {
+    const nextDiv = lc.indexOf("<div", pos);
+    const nextClose = lc.indexOf("</div>", pos);
+    if (nextClose < 0) break;
+    if (nextDiv >= 0 && nextDiv < nextClose) {
+      depth++;
+      pos = nextDiv + 4;
+    } else {
+      depth--;
+      if (depth === 0) return html.slice(m.index + m[0].length, nextClose);
+      pos = nextClose + 6;
+    }
+  }
+  return "";
+}
+
+/** Chỉ link chương: /reader/{storySlug}/{chapterKey} — loại manifest, /user, /sites/, … */
+function parseTocAll(html, storySlug) {
+  const slug = String(storySlug || "").trim();
   const out = [];
   const seen = new Set();
 
   function addHref(raw) {
-    if (!raw) return;
+    if (!raw || !slug) return;
     let path = raw.trim();
     if (/^https?:\/\//i.test(path)) {
       try {
@@ -327,10 +356,15 @@ function parseTocAll(html) {
         return;
       }
     }
-    if (!path.startsWith("/reader/")) return;
-    if (/\/muc-luc$/i.test(path)) return;
-    if (/\/index$/i.test(path)) return;
-    const full = `${BASE}${path.replace(/\/+$/, "")}`;
+    path = path.replace(/\/+$/, "");
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length !== 3 || parts[0] !== "reader") return;
+    if (parts[1] !== slug) return;
+    const chapterKey = parts[2];
+    if (!chapterKey || /^(muc-luc|index)$/i.test(chapterKey)) return;
+    if (/\.(json|xml|png|jpe?g|gif|webp|svg|ico)$/i.test(chapterKey)) return;
+
+    const full = `${BASE}${path}`;
     if (seen.has(full)) return;
     seen.add(full);
     out.push({ url: full, title: "" });
@@ -350,26 +384,63 @@ function parseTocAll(html) {
 }
 
 function extractTitleFromHtml(html) {
+  const chuong = html.match(
+    /<(?:div|h1|h2|h3|span)\b[^>]*\bid\s*=\s*["']chuong-title["'][^>]*>([\s\S]*?)<\/(?:div|h1|h2|h3|span)>/i
+  )?.[1];
+  if (chuong) return stripTags(chuong).trim();
   return (
     html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ||
     html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
     ""
-  ).replace(/<[^>]+>/g, "").trim();
+  )
+    .replace(/<[^>]+>/g, "")
+    .trim();
 }
 
 function parseChapterParagraphs(html) {
-  // BNS reader tends to be straightforward; fallback to grabbing <p> blocks
+  const noidung = extractDivInnerById(html, "noidung");
+  const scope = noidung || "";
+
+  if (scope) {
+    const paras = [];
+    let m;
+    const reP = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+    while ((m = reP.exec(scope)) !== null) {
+      const t = stripTags(m[1]).trim();
+      if (t.length > 1) paras.push(t);
+    }
+    if (paras.length > 0) return paras;
+
+    const brChunks = stripTags(scope.replace(/<br\s*\/?>/gi, "\n\n"))
+      .split(/\n{2,}/)
+      .map(s => s.trim())
+      .filter(s => s.length > 15);
+    if (brChunks.length > 1) return brChunks;
+
+    const divParas = [];
+    const reDiv = /<div\b[^>]*>([\s\S]*?)<\/div>/gi;
+    while ((m = reDiv.exec(scope)) !== null) {
+      const inner = m[1];
+      if (/<div\b/i.test(inner)) continue;
+      const t = stripTags(inner).trim();
+      if (t.length > 40) divParas.push(t);
+    }
+    if (divParas.length > 0) return divParas;
+  }
+
   const paras = [];
   const re = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
     const t = stripTags(m[1]).trim();
-    if (t && t.length > 1) paras.push(t);
+    if (t.length > 1) paras.push(t);
   }
   if (paras.length) return paras;
 
-  // fallback: text from main container
-  const main = html.match(/<article[\s\S]*?<\/article>/i)?.[0] || html.match(/<div[^>]+class="[^"]*content[^"]*"[\s\S]*?<\/div>/i)?.[0] || html;
+  const main =
+    html.match(/<article[\s\S]*?<\/article>/i)?.[0] ||
+    html.match(/<div[^>]+class="[^"]*content[^"]*"[\s\S]*?<\/div>/i)?.[0] ||
+    html;
   const t = stripTags(main).trim();
   return t ? t.split(/\n{2,}/).map(s => s.trim()).filter(Boolean) : [];
 }
@@ -582,7 +653,8 @@ Options:
   }
 
   const meta = state[storyKey].meta;
-  const toc = parseTocAll(tocHtml);
+  const storySlug = fullStoryUrl.split("/").pop();
+  const toc = parseTocAll(tocHtml, storySlug);
   console.log(`🔎 Found chapters: ${toc.length}`);
   if (!toc.length) {
     const snip = tocHtml.replace(/\s+/g, " ").slice(0, 500);
@@ -613,7 +685,14 @@ Options:
 
     console.log(`\n[${i + 1}/${toc.length}] ${ch.url}`);
     try {
-      const html = await (await fetchWithRetry(ch.url, {}, jar)).text();
+      const html = await (
+        await fetchWithRetry(ch.url, {
+          headers: {
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            Referer: fullStoryUrl,
+          },
+        }, jar)
+      ).text();
       const title = extractTitleFromHtml(html) || `Chương ${i + 1}`;
       const paras = parseChapterParagraphs(html);
       state[storyKey].chapters[ch.url] = { status: "done", title, paras };
