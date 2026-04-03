@@ -192,46 +192,80 @@ async function loginBns({ username, password, jar, afterLoginUrl }) {
   form.set("_xfRedirect", xfRedirectFull);
   form.set("_xfToken", token);
 
-  const postHeaders = {
-    "Content-Type": "application/x-www-form-urlencoded",
-    Accept: acceptHtml,
-    Referer: pageUrlForForm,
-    Origin: BASE,
-  };
-
-  const postOnce = async url => {
-    const res = await fetch(url, {
-      method: "POST",
-      redirect: "follow",
-      headers: {
+  /**
+   * POST login + theo redirect tay: mỗi bước đều jar.setFromResponse.
+   * fetch(..., redirect:'follow') thường chỉ áp Set-Cookie từ response *cuối* → mất session giữa đường (Reader hay paywall).
+   */
+  const postLoginFollowRedirects = async startUrl => {
+    let url = startUrl;
+    let method = "POST";
+    let body = form.toString();
+    let referer = pageUrlForForm;
+    for (let hop = 0; hop < 16; hop++) {
+      const h = {
         ...HEADERS,
         ...(jar.header() ? { Cookie: jar.header() } : {}),
-        ...postHeaders,
-        Referer: pageUrlForForm,
-      },
-      body: form.toString(),
-      signal: AbortSignal.timeout(45000),
-    });
-    jar.setFromResponse(res);
-    if (!res.ok) {
-      const err = new Error(`HTTP ${res.status}: ${url}`);
-      err.status = res.status;
-      throw err;
+        Accept: acceptHtml,
+        Referer: referer,
+        Origin: BASE,
+      };
+      if (method === "POST") h["Content-Type"] = "application/x-www-form-urlencoded";
+
+      const res = await fetch(url, {
+        method,
+        redirect: "manual",
+        headers: h,
+        body: method === "POST" ? body : undefined,
+        signal: AbortSignal.timeout(60000),
+      });
+      jar.setFromResponse(res);
+
+      if ([301, 302, 303, 307, 308].includes(res.status)) {
+        const loc = res.headers.get("location");
+        await res.text().catch(() => {});
+        if (!loc) throw new Error(`HTTP ${res.status} redirect không có Location`);
+        referer = url;
+        url = new URL(loc, url).href;
+        method = "GET";
+        body = undefined;
+        continue;
+      }
+
+      const text = await res.text();
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}: ${url}`);
+        err.status = res.status;
+        throw err;
+      }
+      if (
+        /blockMessage[^>]*error|formButtonWrapper[\s\S]*error/i.test(text) &&
+        /(provided password|incorrect password|mật khẩu không đúng|không hợp lệ)/i.test(text)
+      ) {
+        throw new Error("Đăng nhập forum bị từ chối (sai mật khẩu / lỗi form). Kiểm tra BNS_USERNAME/BNS_PASSWORD.");
+      }
+      return;
     }
-    await res.text();
+    throw new Error("Quá nhiều redirect sau POST login");
   };
 
   try {
-    await postOnce(postUrl);
+    await postLoginFollowRedirects(postUrl);
   } catch (e) {
     const st = e?.status;
     const is404 = st === 404 || /HTTP 404:/.test(String(e.message));
     const fallback = `${BASE}/forum/login/login`;
     if (is404 && postUrl !== fallback) {
-      await postOnce(fallback);
+      await postLoginFollowRedirects(fallback);
     } else {
       throw e;
     }
+  }
+
+  try {
+    await fetchWithRetry(`${BASE}/forum/`, { headers: { Accept: acceptHtml, Referer: pageUrlForForm } }, jar);
+    await fetchWithRetry(`${BASE}/reader`, { headers: { Accept: acceptHtml, Referer: `${BASE}/forum/` } }, jar);
+  } catch {
+    /* bridge SSO tùy site */
   }
 
   const verifyUrl =
@@ -247,8 +281,9 @@ async function loginBns({ username, password, jar, afterLoginUrl }) {
     }, jar)
   ).text();
   if (readerPaywallHtml(check)) {
+    console.error("Verify snippet:", check.replace(/\s+/g, " ").slice(0, 900));
     throw new Error(
-      "Sau login vẫn không đọc được trang truyện (paywall). Kiểm tra BNS_USERNAME/BNS_PASSWORD và quyền Reader."
+      "Sau login vẫn không đọc được trang truyện (paywall). Kiểm tra Secrets đúng tài khoản forum có quyền Reader; xem snippet log phía trên."
     );
   }
   if (verifyUrl === `${BASE}/reader` && /Đăng nhập/i.test(check) && /forum\/login/i.test(check)) {
