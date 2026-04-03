@@ -303,6 +303,17 @@ textarea{min-height:90px;line-height:1.7}
     </div>
     <div class="field-row">
       <div class="field">
+        <label>Từ chương <span style="color:var(--muted)">(số thứ tự mục lục, để trống = từ đầu)</span></label>
+        <input type="text" id="inBnsChFrom" placeholder="vd. 1" inputmode="numeric" oninput="onBnsChapterRangeChange()"/>
+      </div>
+      <div class="field">
+        <label>Đến chương <span style="color:var(--muted)">(để trống = đến cuối)</span></label>
+        <input type="text" id="inBnsChTo" placeholder="vd. 50" inputmode="numeric" oninput="onBnsChapterRangeChange()"/>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:-6px;margin-bottom:14px">Chỉ tải và xuất file cho khoảng này. Để cả hai trống = tải <strong>toàn bộ</strong> mục lục (như trước).</div>
+    <div class="field-row">
+      <div class="field">
         <label>throttle_ms <span style="color:var(--muted)">(delay giữa chương)</span></label>
         <input type="text" id="inBnsThrottle" value="900" oninput="updateTriggerBtn()"/>
       </div>
@@ -485,6 +496,29 @@ function onBnsUrlChange(){
   if(el.value.trim() && !ok) el.style.borderColor = 'var(--red, #f85149)';
   else el.style.borderColor = '';
   updateTriggerBtn();
+}
+
+function onBnsChapterRangeChange(){
+  const cf = document.getElementById('inBnsChFrom');
+  const ct = document.getElementById('inBnsChTo');
+  const dig = /^\d+$/;
+  const a = cf.value.trim();
+  const b = ct.value.trim();
+  const rangeBad = a && b && dig.test(a) && dig.test(b) && parseInt(a, 10) > parseInt(b, 10);
+  cf.style.borderColor = (a && !dig.test(a)) || rangeBad ? 'var(--red, #f85149)' : '';
+  ct.style.borderColor = (b && !dig.test(b)) || rangeBad ? 'var(--red, #f85149)' : '';
+  if (!a && !b) { cf.style.borderColor = ''; ct.style.borderColor = ''; }
+  updateTriggerBtn();
+}
+
+function bnsChapterRangeValid(){
+  const cf = document.getElementById('inBnsChFrom').value.trim();
+  const ct = document.getElementById('inBnsChTo').value.trim();
+  const dig = /^\d+$/;
+  if (cf && !dig.test(cf)) return false;
+  if (ct && !dig.test(ct)) return false;
+  if (cf && ct && parseInt(cf, 10) > parseInt(ct, 10)) return false;
+  return true;
 }
 
 // ════════════════════════════════════════
@@ -886,7 +920,7 @@ function updateTriggerBtn(){
     const sv=document.getElementById('inBnsSaveEvery').value.trim();
     const n1=parseInt(th,10), n2=parseInt(sv,10);
     const numsOk = th!=='' && sv!=='' && !Number.isNaN(n1) && !Number.isNaN(n2) && n1>=0 && n2>=1;
-    ready = !!(S.owner && S.repo && S.pat && parseBnsStoryUrl() && S.formats.size>0 && numsOk);
+    ready = !!(S.owner && S.repo && S.pat && parseBnsStoryUrl() && S.formats.size>0 && numsOk && bnsChapterRangeValid());
   }
   document.getElementById('btnTrigger').disabled=!ready;
 }
@@ -908,6 +942,10 @@ async function triggerWorkflow(){
       const throttle_ms=String(Math.max(0,t));
       const save_every=String(Math.max(1,s));
       const inputs={ story_url: storyUrl, format: fmtStr, artifact_name: artName, throttle_ms, save_every };
+      const chFrom=document.getElementById('inBnsChFrom').value.trim();
+      const chTo=document.getElementById('inBnsChTo').value.trim();
+      if(chFrom) inputs.chapter_from=chFrom;
+      if(chTo) inputs.chapter_to=chTo;
       const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/bns-download.yml/dispatches`,{
         method:'POST', body:JSON.stringify({ ref:'main', inputs })
       });
