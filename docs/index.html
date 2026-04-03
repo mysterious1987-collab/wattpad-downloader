@@ -297,9 +297,9 @@ textarea{min-height:90px;line-height:1.7}
     <!-- BNS -->
     <div id="bnsPanel" class="source-panel">
     <div class="field">
-      <label>URL truyện BNS <span style="color:var(--muted)">(không dùng /muc-luc)</span></label>
+      <label>URL truyện BNS</label>
       <input type="text" id="inBnsStoryUrl" placeholder="https://bachngocsach.cc/reader/quy-bi-chi-chu" oninput="onBnsUrlChange()"/>
-      <div class="hint">Đăng nhập chạy trên GitHub qua Secrets <code>BNS_USERNAME</code> / <code>BNS_PASSWORD</code>. Workflow: <code>bns-download.yml</code></div>
+      <div class="hint">Dán URL trang truyện <strong>hoặc</strong> URL mục lục (<code>…/muc-luc?page=all</code>) — gửi lên Actions sẽ là URL truyện gốc; script <strong>tự mở</strong> mục lục đầy đủ. Secrets: <code>BNS_USERNAME</code> / <code>BNS_PASSWORD</code>.</div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -473,8 +473,10 @@ function parseBnsStoryUrl(){
     const url = new URL(u);
     const h = url.hostname.replace(/^www\./i, '');
     if(!h.includes('bachngocsach')) return null;
-    if(!url.pathname.includes('/reader/')) return null;
-    return url.href.replace(/#.*$/, '');
+    let p = url.pathname.replace(/\/+$/,'').replace(/\/muc-luc$/i,'');
+    const m = p.match(/^\/reader\/([^/]+)$/i);
+    if(!m) return null;
+    return `https://bachngocsach.cc/reader/${m[1]}`;
   } catch { return null; }
 }
 function onBnsUrlChange(){
