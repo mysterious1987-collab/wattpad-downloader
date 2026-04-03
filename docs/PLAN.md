@@ -1,4 +1,4 @@
-## PLAN — v1.5
+## PLAN — v1.6
 
 ### Goal
 
@@ -12,6 +12,11 @@
 - Không dùng browser automation
 - Tránh rate-limit (429)
 - Ưu tiên ổn định hơn là “nhanh tối đa”
+
+### v1.6 changes
+
+- **BNS**: giải mã nội dung qua API `decrypt-content` (payload `#encrypted-content`); chọn phạm vi chương `--chapter-from` / `--chapter-to` + UI `index.html`
+- Đồng bộ nhãn release **v1.6** (workflows, scripts, docs)
 
 ### v1.5 changes
 

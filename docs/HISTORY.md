@@ -1,5 +1,11 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v1.6 (2026-04-03)
+
+- **BNS**: tải chương có `#encrypted-content` — gọi `POST /reader/api/decrypt-content.php` (cùng cookie đăng nhập) rồi parse HTML đã giải mã
+- **BNS**: phạm vi chương — CLI `--chapter-from` / `--chapter-to`, workflow inputs `chapter_from` / `chapter_to`, UI **Từ chương / Đến chương** trên tab Bạch Ngọc Sách trong `index.html`
+- Gói **`Object Github/v1.6`**: snapshot repo đầy đủ (scripts, workflows, docs, UI) nhãn v1.6
+
 ### v1.5 (2026-04-03)
 
 - **Fix build**: thêm `package.json` (workflow trước đó có `npm install` nhưng thiếu manifest)
