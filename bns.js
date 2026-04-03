@@ -10,6 +10,7 @@
  *
  * Usage:
  *   node bns.js --story-url "https://bachngocsach.cc/reader/quy-bi-chi-chu" --format epub,txt --output ./output --state ./bns-state.json
+ *   node bns.js ... --chapter-from 10 --chapter-to 50   # tuỳ chọn: chỉ tải & xuất chương 10–50 (theo mục lục)
  */
 
 "use strict";
@@ -337,6 +338,32 @@ function extractDivInnerById(html, id) {
   return "";
 }
 
+/**
+ * Giới hạn danh sách chương theo số thứ tự 1-based (theo mục lục).
+ * Để trống from/to → từ đầu / đến cuối.
+ */
+function resolveChapterRange(toc, fromRaw, toRaw) {
+  const total = toc.length;
+  let from = 1;
+  let to = total;
+  const fs = fromRaw != null && String(fromRaw).trim() !== "" ? String(fromRaw).trim() : "";
+  const ts = toRaw != null && String(toRaw).trim() !== "" ? String(toRaw).trim() : "";
+  if (fs) {
+    const n = parseInt(fs, 10);
+    if (!Number.isNaN(n)) from = n;
+  }
+  if (ts) {
+    const n = parseInt(ts, 10);
+    if (!Number.isNaN(n)) to = n;
+  }
+  from = Math.max(1, Math.min(from, total));
+  to = Math.max(1, Math.min(to, total));
+  if (from > to) {
+    throw new Error(`Phạm vi chương không hợp lệ: từ ${from} đến ${to} (mục lục có ${total} chương).`);
+  }
+  return { from, to, slice: toc.slice(from - 1, to) };
+}
+
 /** Chỉ link chương: /reader/{storySlug}/{chapterKey} — loại manifest, /user, /sites/, … */
 function parseTocAll(html, storySlug) {
   const slug = String(storySlug || "").trim();
@@ -395,6 +422,46 @@ function extractTitleFromHtml(html) {
   )
     .replace(/<[^>]+>/g, "")
     .trim();
+}
+
+/** Payload base64 trong #encrypted-content (BNS mã hóa thân chương, browser gọi API giải mã). */
+function extractEncryptedContentPayload(html) {
+  const m = html.match(/<div\b[^>]*\bid\s*=\s*["']encrypted-content["'][^>]*>([\s\S]*?)<\/div>/i);
+  if (!m) return "";
+  return m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, "").trim();
+}
+
+async function decryptBnsChapterBody(payload, jar, chapterPageUrl) {
+  if (!payload || payload.length < 20) return "";
+  const api = `${BASE}/reader/api/decrypt-content.php`;
+  const referer = /^https?:\/\//i.test(chapterPageUrl) ? chapterPageUrl : `${BASE}${chapterPageUrl.startsWith("/") ? "" : "/"}${chapterPageUrl}`;
+  const res = await fetchWithRetry(
+    api,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/plain, */*",
+        Referer: referer,
+        Origin: BASE,
+      },
+      body: JSON.stringify({ encryptedData: payload }),
+    },
+    jar
+  );
+  const text = await res.text();
+  let j;
+  try {
+    j = JSON.parse(text);
+  } catch {
+    throw new Error(`API decrypt không trả JSON (${text.slice(0, 100)}…)`);
+  }
+  if (j.error || j.message) {
+    const msg = String(j.error || j.message || "");
+    if (msg) throw new Error(`Decrypt: ${msg.slice(0, 200)}`);
+  }
+  const content = j.content ?? j.data?.content;
+  return typeof content === "string" ? content : "";
 }
 
 function parseChapterParagraphs(html) {
@@ -580,6 +647,10 @@ Options:
   let stateFile = "./bns-state.json";
   let throttleMs = DEFAULT_THROTTLE_MS;
   let saveEvery = DEFAULT_SAVE_EVERY;
+  /** @type {string|null} */
+  let chapterFromArg = null;
+  /** @type {string|null} */
+  let chapterToArg = null;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -589,6 +660,8 @@ Options:
     else if (a === "--state" && args[i + 1]) stateFile = args[++i];
     else if (a === "--throttle-ms" && args[i + 1]) throttleMs = Math.max(0, parseInt(args[++i], 10));
     else if (a === "--save-every" && args[i + 1]) saveEvery = Math.max(1, parseInt(args[++i], 10));
+    else if (a === "--chapter-from" && args[i + 1]) chapterFromArg = String(args[++i]).trim();
+    else if (a === "--chapter-to" && args[i + 1]) chapterToArg = String(args[++i]).trim();
   }
 
   formats = formats.filter(f => ["epub", "txt", "md", "json"].includes(f));
@@ -662,6 +735,15 @@ Options:
     throw new Error("Không parse được danh sách chương từ TOC (xem log preview phía trên).");
   }
 
+  const { slice: tocWork, from: rangeFrom, to: rangeTo } = resolveChapterRange(
+    toc,
+    chapterFromArg,
+    chapterToArg
+  );
+  if (tocWork.length < toc.length) {
+    console.log(`📌 Phạm vi: chương ${rangeFrom}–${rangeTo} (${tocWork.length} chương, bỏ qua phần còn lại của mục lục)`);
+  }
+
   let cover = null;
   if (meta.coverUrl) {
     try {
@@ -678,12 +760,12 @@ Options:
   let saveCountdown = saveEvery;
   let downloaded = 0;
 
-  for (let i = 0; i < toc.length; i++) {
-    const ch = toc[i];
+  for (let i = 0; i < tocWork.length; i++) {
+    const ch = tocWork[i];
     const cached = state[storyKey].chapters[ch.url];
     if (cached?.status === "done" && cached?.paras?.length) continue;
 
-    console.log(`\n[${i + 1}/${toc.length}] ${ch.url}`);
+    console.log(`\n[${i + 1}/${tocWork.length}] ${ch.url}`);
     try {
       const html = await (
         await fetchWithRetry(ch.url, {
@@ -694,7 +776,16 @@ Options:
         }, jar)
       ).text();
       const title = extractTitleFromHtml(html) || `Chương ${i + 1}`;
-      const paras = parseChapterParagraphs(html);
+      let parseHtml = html;
+      const enc = extractEncryptedContentPayload(html);
+      if (enc.length > 40) {
+        const dec = await decryptBnsChapterBody(enc, jar, ch.url);
+        if (dec) {
+          parseHtml = dec;
+          console.log("  🔓 Giải mã nội dung (encrypted-content → API)");
+        }
+      }
+      const paras = parseChapterParagraphs(parseHtml);
       state[storyKey].chapters[ch.url] = { status: "done", title, paras };
       console.log(`✓ ${title} (${paras.length} đoạn)`);
     } catch (e) {
@@ -708,13 +799,13 @@ Options:
       await saveState(stateFile, state);
       saveCountdown = saveEvery;
     }
-    if (i < toc.length - 1) await sleep(throttleMs);
+    if (i < tocWork.length - 1) await sleep(throttleMs);
   }
 
   await saveState(stateFile, state);
 
-  // Build chapters in TOC order
-  const chapters = toc.map((c, idx) => {
+  // Build chapters in TOC order (chỉ phạm vi đã chọn)
+  const chapters = tocWork.map((c, idx) => {
     const x = state[storyKey].chapters[c.url];
     return {
       index: idx + 1,
