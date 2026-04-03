@@ -81,18 +81,30 @@ class CookieJar {
   }
 }
 
+/** Trang reader / mục lục trả về khi chưa được coi là đã đăng nhập đọc */
+function readerPaywallHtml(html) {
+  const h = String(html || "");
+  return (
+    /Đăng nhập để đọc truyện/i.test(h) ||
+    /log\s*in\s*to\s*read/i.test(h)
+  );
+}
+
 async function fetchWithRetry(url, opts = {}, jar = null) {
+  const { headers: optHeaders, signal: userSignal, ...restOpts } = opts;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
+      const headers = {
+        ...HEADERS,
+        ...(jar?.header() ? { Cookie: jar.header() } : {}),
+        ...(optHeaders || {}),
+      };
+      const signal = userSignal ?? AbortSignal.timeout(30000);
       const res = await fetch(url, {
         redirect: "follow",
-        headers: {
-          ...HEADERS,
-          ...(jar?.header() ? { Cookie: jar.header() } : {}),
-          ...(opts.headers || {}),
-        },
-        signal: AbortSignal.timeout(30000),
-        ...opts,
+        headers,
+        signal,
+        ...restOpts,
       });
       if (jar) jar.setFromResponse(res);
       if (res.ok) return res;
@@ -222,8 +234,24 @@ async function loginBns({ username, password, jar, afterLoginUrl }) {
     }
   }
 
-  const check = await (await fetchWithRetry(`${BASE}/reader`, { headers: { Accept: acceptHtml } }, jar)).text();
-  if (/Đăng nhập/i.test(check) && /forum\/login/i.test(check)) {
+  const verifyUrl =
+    afterLoginUrl && /^https:\/\//i.test(String(afterLoginUrl).trim()) && /\/reader\//i.test(String(afterLoginUrl))
+      ? String(afterLoginUrl).trim().replace(/#.*$/, "")
+      : `${BASE}/reader`;
+  const check = await (
+    await fetchWithRetry(verifyUrl, {
+      headers: {
+        Accept: acceptHtml,
+        Referer: `${BASE}/reader/index`,
+      },
+    }, jar)
+  ).text();
+  if (readerPaywallHtml(check)) {
+    throw new Error(
+      "Sau login vẫn không đọc được trang truyện (paywall). Kiểm tra BNS_USERNAME/BNS_PASSWORD và quyền Reader."
+    );
+  }
+  if (verifyUrl === `${BASE}/reader` && /Đăng nhập/i.test(check) && /forum\/login/i.test(check)) {
     throw new Error("Login thất bại (vẫn bị yêu cầu đăng nhập). Kiểm tra BNS_USERNAME/BNS_PASSWORD.");
   }
   return true;
@@ -487,10 +515,27 @@ Options:
   await loginBns({ username, password, jar, afterLoginUrl: fullStoryUrl });
   console.log("✅ Login OK");
 
+  console.log("📖 Mở trang truyện (bridge cookie Reader → mục lục)...");
+  await (
+    await fetchWithRetry(fullStoryUrl, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Referer: `${BASE}/reader/index`,
+      },
+    }, jar)
+  ).text();
+
   console.log("📚 Loading TOC...");
-  const tocHtml = await (await fetchWithRetry(tocUrl, {}, jar)).text();
-  if (/Đăng nhập để đọc truyện/i.test(tocHtml)) {
-    throw new Error("TOC vẫn bị chặn sau login. Có thể redirect khác / cookie chưa đúng.");
+  const tocHtml = await (
+    await fetchWithRetry(tocUrl, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Referer: fullStoryUrl,
+      },
+    }, jar)
+  ).text();
+  if (readerPaywallHtml(tocHtml)) {
+    throw new Error("TOC vẫn bị paywall sau login. Nếu đã pull bns.js mới: kiểm tra quyền Reader / tài khoản.");
   }
 
   if (!state[storyKey].meta) {
