@@ -112,8 +112,22 @@ async function fetchWithRetry(url, opts = {}, jar = null) {
   }
 }
 
-async function loginBns({ username, password, jar }) {
-  const loginPageUrl = `${BASE}/forum/login?redirect=${encodeURIComponent("/reader/index")}`;
+async function loginBns({ username, password, jar, afterLoginUrl }) {
+  let redirectPath = "/reader/index";
+  let xfRedirectFull = `${BASE}/reader/index`;
+  if (afterLoginUrl) {
+    try {
+      const u = new URL(String(afterLoginUrl));
+      if (u.hostname.replace(/^www\./i, "") === "bachngocsach.cc") {
+        const p = `${u.pathname}${u.search || ""}`.replace(/\/{2,}/g, "/") || "/reader/index";
+        redirectPath = p.startsWith("/") ? p : `/${p}`;
+        xfRedirectFull = `${BASE}${u.pathname.replace(/\/+$/, "")}${u.search || ""}`;
+      }
+    } catch {
+      /* giữ mặc định */
+    }
+  }
+  const loginPageUrl = `${BASE}/forum/login?redirect=${encodeURIComponent(redirectPath)}`;
   const acceptHtml = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
   try {
@@ -163,7 +177,7 @@ async function loginBns({ username, password, jar }) {
   form.set("login", username);
   form.set("password", password);
   form.set("remember", "1");
-  form.set("_xfRedirect", `${BASE}/reader/index`);
+  form.set("_xfRedirect", xfRedirectFull);
   form.set("_xfToken", token);
 
   const postHeaders = {
@@ -220,29 +234,55 @@ function normalizeStoryUrl(u) {
   if (!s) throw new Error("Thiếu --story-url");
   if (!/^https?:\/\//i.test(s)) s = "https://" + s.replace(/^\/+/, "");
   const url = new URL(s);
-  if (url.hostname !== "bachngocsach.cc") throw new Error("story-url phải thuộc bachngocsach.cc");
-  return `${BASE}${url.pathname.replace(/\/+$/, "")}`;
+  const host = url.hostname.replace(/^www\./i, "");
+  if (host !== "bachngocsach.cc") throw new Error("story-url phải thuộc bachngocsach.cc");
+  let p = url.pathname.replace(/\/+$/, "");
+  p = p.replace(/\/muc-luc$/i, "");
+  const m = p.match(/^\/reader\/([^/]+)$/i);
+  if (!m) {
+    throw new Error(
+      "story-url cần dạng .../reader/<slug> (có thể dán thêm /muc-luc hoặc ?page=all — script tự bỏ; danh sách chương luôn lấy từ muc-luc?page=all)."
+    );
+  }
+  return `${BASE}/reader/${m[1]}`;
 }
 
 function parseTocAll(html) {
-  // Heuristic: collect /reader/<story>/<chapterSlug> links
   const out = [];
   const seen = new Set();
-  const re = /href="(\/reader\/[^"\/]+\/[^"?#]+)"/gi;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const href = m[1];
-    if (!href) continue;
-    if (/\/muc-luc$/i.test(href)) continue;
-    if (/\/index$/i.test(href)) continue;
-    const full = `${BASE}${href}`;
-    if (seen.has(full)) continue;
+
+  function addHref(raw) {
+    if (!raw) return;
+    let path = raw.trim();
+    if (/^https?:\/\//i.test(path)) {
+      try {
+        const u = new URL(path);
+        const h = u.hostname.replace(/^www\./i, "");
+        if (h !== "bachngocsach.cc") return;
+        path = u.pathname;
+      } catch {
+        return;
+      }
+    }
+    if (!path.startsWith("/reader/")) return;
+    if (/\/muc-luc$/i.test(path)) return;
+    if (/\/index$/i.test(path)) return;
+    const full = `${BASE}${path.replace(/\/+$/, "")}`;
+    if (seen.has(full)) return;
     seen.add(full);
     out.push({ url: full, title: "" });
   }
 
-  // Try also to capture title text near links (best effort)
-  // This is optional; chapter pages will give titles anyway.
+  const patterns = [
+    /href="(\/reader\/[^"\/]+\/[^"?#]+)"/gi,
+    /href='(\/reader\/[^'\/]+\/[^'?#]+)'/gi,
+    /href="(https?:\/\/(?:www\.)?bachngocsach\.cc\/reader\/[^"\/]+\/[^"?#]+)"/gi,
+    /href='(https?:\/\/(?:www\.)?bachngocsach\.cc\/reader\/[^'\/]+\/[^'?#]+)'/gi,
+  ];
+  for (const re of patterns) {
+    for (const m of html.matchAll(re)) addHref(m[1]);
+  }
+
   return out;
 }
 
@@ -444,7 +484,7 @@ Options:
   console.log(`${"═".repeat(60)}\n`);
 
   console.log("🔐 Logging in...");
-  await loginBns({ username, password, jar });
+  await loginBns({ username, password, jar, afterLoginUrl: fullStoryUrl });
   console.log("✅ Login OK");
 
   console.log("📚 Loading TOC...");
@@ -464,7 +504,11 @@ Options:
   const meta = state[storyKey].meta;
   const toc = parseTocAll(tocHtml);
   console.log(`🔎 Found chapters: ${toc.length}`);
-  if (!toc.length) throw new Error("Không parse được danh sách chương từ TOC.");
+  if (!toc.length) {
+    const snip = tocHtml.replace(/\s+/g, " ").slice(0, 500);
+    console.error(`TOC preview (${tocHtml.length} chars): ${snip}${tocHtml.length > 500 ? "…" : ""}`);
+    throw new Error("Không parse được danh sách chương từ TOC (xem log preview phía trên).");
+  }
 
   let cover = null;
   if (meta.coverUrl) {
