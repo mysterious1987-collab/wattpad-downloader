@@ -1,4 +1,4 @@
-name: BNS Downloader v1.5
+name: BNS Downloader v1.6
 
 on:
   workflow_dispatch:
@@ -39,6 +39,16 @@ on:
         default: '5'
         type: string
 
+      chapter_from:
+        description: 'Chương bắt đầu (số thứ tự theo mục lục, bắt đầu từ 1). Để trống = từ đầu truyện.'
+        required: false
+        type: string
+
+      chapter_to:
+        description: 'Chương kết thúc (bao gồm). Để trống = đến chương cuối.'
+        required: false
+        type: string
+
 jobs:
   download:
     runs-on: ubuntu-latest
@@ -73,6 +83,11 @@ jobs:
           THROTTLE_MS="${{ github.event.inputs.throttle_ms || '900' }}"
           SAVE_EVERY="${{ github.event.inputs.save_every || '5' }}"
           STORY_URL="${{ github.event.inputs.story_url }}"
+          CF="${{ github.event.inputs.chapter_from }}"
+          CT="${{ github.event.inputs.chapter_to }}"
+          EXTRA=()
+          [ -n "$CF" ] && EXTRA+=(--chapter-from "$CF")
+          [ -n "$CT" ] && EXTRA+=(--chapter-to "$CT")
 
           node bns.js \
             --story-url "$STORY_URL" \
@@ -80,7 +95,8 @@ jobs:
             --output ./output \
             --state ./bns-state.json \
             --throttle-ms "$THROTTLE_MS" \
-            --save-every "$SAVE_EVERY"
+            --save-every "$SAVE_EVERY" \
+            "${EXTRA[@]}"
         continue-on-error: true
 
       - name: Save download state
