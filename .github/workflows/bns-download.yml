@@ -1,8 +1,13 @@
-name: Wattpad Downloader v1.5
+name: BNS Downloader v1.5
 
 on:
   workflow_dispatch:
     inputs:
+      story_url:
+        description: 'URL truyện (không phải muc-luc). Ví dụ: https://bachngocsach.cc/reader/quy-bi-chi-chu'
+        required: true
+        type: string
+
       format:
         description: 'Output format'
         required: true
@@ -17,18 +22,8 @@ on:
           - epub,txt,md
           - epub,txt,md,json
 
-      urls:
-        description: 'URLs muốn tải (mỗi dòng 1, để trống = dùng urls.txt)'
-        required: false
-        type: string
-
       artifact_name:
         description: 'Tên artifact (để trống = tự sinh)'
-        required: false
-        type: string
-
-      chapters_map:
-        description: 'Chapter map JSON — sinh tự động từ UI, không cần nhập tay'
         required: false
         type: string
 
@@ -61,51 +56,39 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare URLs
-        run: |
-          if [ -n "${{ github.event.inputs.urls }}" ]; then
-            printf '%s' "${{ github.event.inputs.urls }}" > urls_run.txt
-          elif [ -f urls.txt ]; then
-            cp urls.txt urls_run.txt
-          else
-            echo "❌ Không có URLs!"
-            exit 1
-          fi
-          echo "=== URLs sẽ tải ==="
-          cat urls_run.txt
-          echo ""
-          echo "Tổng: $(grep -c 'wattpad' urls_run.txt || echo 0) URL"
-
       - name: Restore download state
         uses: actions/cache@v5
         with:
-          path: state.json
-          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+          path: bns-state.json
+          key: bns-state-${{ hashFiles('.github/workflows/bns-download.yml') }}-${{ github.event.inputs.story_url }}
           restore-keys: |
-            wattpad-state-
+            bns-state-
 
-      - name: Download stories
+      - name: Download story
+        env:
+          BNS_USERNAME: ${{ secrets.BNS_USERNAME }}
+          BNS_PASSWORD: ${{ secrets.BNS_PASSWORD }}
         run: |
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
-          CHAPTERS_MAP="${{ github.event.inputs.chapters_map }}"
           THROTTLE_MS="${{ github.event.inputs.throttle_ms || '900' }}"
           SAVE_EVERY="${{ github.event.inputs.save_every || '5' }}"
+          STORY_URL="${{ github.event.inputs.story_url }}"
 
-          CMD="node wattpad.js --batch urls_run.txt --format \"$FORMAT\" --output ./output --state ./state.json --throttle-ms \"$THROTTLE_MS\" --save-every \"$SAVE_EVERY\""
-
-          if [ -n "$CHAPTERS_MAP" ]; then
-            CMD="$CMD --chapters-map '$CHAPTERS_MAP'"
-          fi
-
-          eval $CMD
+          node bns.js \
+            --story-url "$STORY_URL" \
+            --format "$FORMAT" \
+            --output ./output \
+            --state ./bns-state.json \
+            --throttle-ms "$THROTTLE_MS" \
+            --save-every "$SAVE_EVERY"
         continue-on-error: true
 
       - name: Save download state
         uses: actions/cache/save@v5
         if: always()
         with:
-          path: state.json
-          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+          path: bns-state.json
+          key: bns-state-${{ hashFiles('.github/workflows/bns-download.yml') }}-${{ github.event.inputs.story_url }}
 
       - name: List output files
         run: |
@@ -123,7 +106,7 @@ jobs:
           NAME="${{ github.event.inputs.artifact_name }}"
           if [ -z "$NAME" ]; then
             DATE=$(date '+%Y-%m-%d')
-            NAME="wattpad-ebooks_${DATE}_run-${{ github.run_number }}"
+            NAME="bns-ebooks_${DATE}_run-${{ github.run_number }}"
           fi
           NAME=$(echo "$NAME" | tr -cs 'a-zA-Z0-9_-' '-' | sed 's/-*$//')
           echo "name=$NAME" >> $GITHUB_OUTPUT
