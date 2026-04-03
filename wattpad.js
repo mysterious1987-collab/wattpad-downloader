@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v1.5
+ * Wattpad Batch Downloader — GitHub Actions edition v1.6
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
@@ -385,7 +385,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v1.5
+Wattpad Downloader v1.6
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -436,7 +436,7 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v1.5`);
+  console.log(`Wattpad Downloader v1.6`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);

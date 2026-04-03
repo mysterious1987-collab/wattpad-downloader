@@ -1,31 +1,29 @@
-## Gói v1.5 (Object Github) — đủ file để repo chạy
+## Wattpad Downloader — GitHub Actions (v1.6)
 
-Thư mục này là **bản đóng gói đầy đủ**: script Node, workflow GitHub Actions, `package.json`, tài liệu và **giao diện điều khiển** `index.html`.
+Chạy tải truyện Wattpad về **EPUB/TXT/Markdown/JSON** trên GitHub Actions, rồi tải file về máy qua **Artifacts** (máy bạn không cần crawl Wattpad).
 
-### Cấu trúc
+### Cách dùng nhanh
 
-| Mục | Mô tả |
-|-----|--------|
-| `index.html` | UI mở bằng trình duyệt (PAT + trigger workflow). **Không** bắt buộc trên GitHub nếu bạn chỉ chạy từ tab Actions. |
-| `.github/workflows/` | `download.yml` (Wattpad), `bns-download.yml` (BNS) |
-| `wattpad.js`, `bns.js` | Script tải |
-| `package.json`, `urls.txt` | Dependencies và URL mặc định (Wattpad) |
-| `docs/` | Hướng dẫn / lịch sử |
+1) Vào tab **Actions** → workflow **Wattpad Downloader v1.6**
+2) Bấm **Run workflow**
+   - **urls**: dán URL (mỗi dòng 1) hoặc để trống để dùng `urls.txt`
+   - **format**: chọn định dạng xuất
+   - **throttle_ms**: mặc định `900` (nhanh hơn → giảm số này, nhưng dễ 429)
+   - **save_every**: mặc định `5` (tăng để nhanh hơn do giảm IO)
+3) Chờ run xong → tải artifact trong trang run
 
-### Đưa lên GitHub (repo gốc)
+### Bạch Ngọc Sách (BNS) — có login
 
-1. Copy **toàn bộ nội dung** thư mục `v1.5` vào **root** repository GitHub của bạn (hoặc chỉ copy các file cần cho Actions: bỏ `index.html` nếu không muốn commit UI).
-2. Đảm bảo nhánh mặc định có tên **`main`** (UI trigger dùng `ref: main`) hoặc sửa trong `index.html` nếu nhánh khác.
-3. Thêm Secrets **BNS** nếu dùng workflow BNS: `BNS_USERNAME`, `BNS_PASSWORD`.
+- Workflow: **BNS Downloader v1.6**
+- Cần tạo GitHub Secrets:
+  - `BNS_USERNAME`
+  - `BNS_PASSWORD`
+- Khi chạy workflow, nhập `story_url` dạng: `https://bachngocsach.cc/reader/<slug>`
+- Tuỳ chọn: **chapter_from** / **chapter_to** (số thứ tự theo mục lục) để chỉ tải một đoạn; trên UI mở `index.html` tab BNS có ô **Từ chương / Đến chương**
 
-### Chạy thử local
+### Tài liệu
 
-```bash
-cd "Object Github/v1.5"
-npm ci
-# hoặc: npm install
-node wattpad.js --help
-node bns.js --help
-```
+- `docs/GUIDE.md`
+- `docs/PLAN.md`
+- `docs/HISTORY.md`
 
-Có sẵn `package-lock.json` để `npm ci` khớp phiên bản dependency với CI. Thư mục `node_modules/` không nằm trong gói — tạo lại bằng lệnh trên.
