@@ -1,10 +1,5 @@
-# Danh sách story Wattpad cần tải
-# Mỗi dòng 1 URL
-# Dòng bắt đầu bằng # sẽ bị bỏ qua
- 
-# Ví dụ — thay bằng URL thật của bạn:
-https://www.wattpad.com/story/59299875-5asdaz
-https://www.wattpad.com/story/55616781-2asdsa
- 
-# Cũng hỗ trợ URL chapter bất kỳ trong truyện:
-# https://www.wattpad.com/chapter/987654321
+# Mỗi dòng 1 URL Wattpad
+# Ví dụ:
+# https://www.wattpad.com/story/123456-ten-truyen
+# https://www.wattpad.com/story/789012-truyen-khac
+

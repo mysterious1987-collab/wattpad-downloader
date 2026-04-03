@@ -1,11 +1,14 @@
 {
   "name": "wattpad-downloader",
-  "version": "1.0.0",
+  "version": "1.5.0",
+  "private": true,
   "type": "module",
-  "description": "Wattpad batch downloader for GitHub Actions",
-  "main": "wattpad.js",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "@zip.js/zip.js": "^2.7.52"
+    "@zip.js/zip.js": "^2.7.62",
+    "node-fetch": "^3.3.2"
   }
 }
+

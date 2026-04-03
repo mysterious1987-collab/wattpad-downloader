@@ -1,40 +1,31 @@
-# Wattpad Downloader — GitHub Actions
+## Gói v1.5 (Object Github) — đủ file để repo chạy
 
-Tự động tải truyện Wattpad về dạng EPUB/TXT/Markdown/JSON, chạy trên GitHub — không cần mở máy tính.
+Thư mục này là **bản đóng gói đầy đủ**: script Node, workflow GitHub Actions, `package.json`, tài liệu và **giao diện điều khiển** `index.html`.
 
-## Cách dùng
+### Cấu trúc
 
-### 1. Thêm URL vào `urls.txt`
+| Mục | Mô tả |
+|-----|--------|
+| `index.html` | UI mở bằng trình duyệt (PAT + trigger workflow). **Không** bắt buộc trên GitHub nếu bạn chỉ chạy từ tab Actions. |
+| `.github/workflows/` | `download.yml` (Wattpad), `bns-download.yml` (BNS) |
+| `wattpad.js`, `bns.js` | Script tải |
+| `package.json`, `urls.txt` | Dependencies và URL mặc định (Wattpad) |
+| `docs/` | Hướng dẫn / lịch sử |
 
+### Đưa lên GitHub (repo gốc)
+
+1. Copy **toàn bộ nội dung** thư mục `v1.5` vào **root** repository GitHub của bạn (hoặc chỉ copy các file cần cho Actions: bỏ `index.html` nếu không muốn commit UI).
+2. Đảm bảo nhánh mặc định có tên **`main`** (UI trigger dùng `ref: main`) hoặc sửa trong `index.html` nếu nhánh khác.
+3. Thêm Secrets **BNS** nếu dùng workflow BNS: `BNS_USERNAME`, `BNS_PASSWORD`.
+
+### Chạy thử local
+
+```bash
+cd "Object Github/v1.5"
+npm ci
+# hoặc: npm install
+node wattpad.js --help
+node bns.js --help
 ```
-https://www.wattpad.com/story/123456-ten-truyen
-https://www.wattpad.com/story/789012-story-two
-```
 
-### 2. Chạy từ GitHub UI
-
-- Vào tab **Actions** → **Wattpad Downloader** → **Run workflow**
-- Chọn format (epub/txt/md/json)
-- Hoặc nhập URL trực tiếp vào ô input (không cần sửa urls.txt)
-- Bấm **Run workflow**
-
-### 3. Tải file về
-
-Sau khi job hoàn thành → kéo xuống phần **Artifacts** → tải file `.zip`
-
-## Tính năng
-
-- ✅ **Auto-resume**: nếu bị ngắt giữa chừng, chạy lại sẽ tiếp tục từ chỗ dở
-- ✅ **Multi-format**: chọn `epub,txt` để xuất cả 2 format cùng lúc  
-- ✅ **Retry tự động**: thử lại khi gặp lỗi mạng
-- ✅ **Batch**: tải nhiều truyện trong 1 lần chạy
-
-## Giới hạn GitHub Actions (free)
-
-| | Repo Public | Repo Private |
-|---|---|---|
-| Phút/tháng | Không giới hạn | 2,000 phút |
-| Thời gian tối đa/job | 6 tiếng | 6 tiếng |
-| Artifact giữ | 90 ngày | 90 ngày |
-
-Truyện 200 chapter ≈ 10–15 phút chạy.
+Có sẵn `package-lock.json` để `npm ci` khớp phiên bản dependency với CI. Thư mục `node_modules/` không nằm trong gói — tạo lại bằng lệnh trên.

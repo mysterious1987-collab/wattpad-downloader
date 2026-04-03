@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v1.2
+ * Wattpad Batch Downloader — GitHub Actions edition v1.5
+ *
+ * Mục tiêu:
+ * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
+ * - Resume nhờ state.json cache.
+ * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -17,7 +22,7 @@ import path from "path";
 import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
 
 // ══════════════════════════════════════════════════════════════
-// CONFIG
+// CONFIG (defaults)
 // ══════════════════════════════════════════════════════════════
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -25,10 +30,14 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.5",
 };
 
-const THROTTLE_MS   = 1200;
-const PAGE_DELAY_MS = 400;
-const MAX_RETRIES   = 4;
-const RETRY_DELAYS  = [2000, 5000, 10000, 20000];
+// Delay giữa chapters (ms). Có thể giảm để tăng tốc nhưng dễ dính 429.
+const DEFAULT_THROTTLE_MS = 900;
+const PAGE_DELAY_MS = 300;
+const MAX_RETRIES = 4;
+const RETRY_DELAYS = [1500, 3500, 8000, 15000];
+
+// Save state theo lô để giảm IO (đặc biệt trong Actions)
+const DEFAULT_SAVE_EVERY = 5;
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
@@ -82,16 +91,18 @@ async function fetchWithRetry(url, opts = {}, retries = MAX_RETRIES) {
         ...opts,
       });
       if (res.ok) return res;
+
       if (res.status === 429) {
         const wait = (parseInt(res.headers.get("Retry-After") || "30")) * 1000;
-        logLine(`  ⏳ Rate limited, đợi ${wait/1000}s...`);
+        logLine(`  ⏳ Rate limited (429), đợi ${wait/1000}s...`);
         await sleep(wait);
         continue;
       }
+
       if (attempt === retries) throw new Error(`HTTP ${res.status}: ${url}`);
     } catch (e) {
       if (attempt === retries) throw e;
-      const wait = RETRY_DELAYS[attempt] || 20000;
+      const wait = RETRY_DELAYS[attempt] || 15000;
       logLine(`  ⚠ Lỗi (lần ${attempt + 1}): ${e.message} — thử lại sau ${wait/1000}s`);
       await sleep(wait);
     }
@@ -120,7 +131,9 @@ function extractStoryId(url) {
 }
 
 async function fetchStoryMeta(storyId) {
-  return fetchJson(`https://www.wattpad.com/api/v3/stories/${storyId}?fields=id,title,user,description,cover,tags,completed,parts(id,title,url,wordCount)`);
+  return fetchJson(
+    `https://www.wattpad.com/api/v3/stories/${storyId}?fields=id,title,user,description,cover,tags,completed,parts(id,title,url,wordCount)`
+  );
 }
 
 function extractTextUrlInfo(html) {
@@ -150,19 +163,29 @@ function extractTextUrlInfo(html) {
   } catch { return null; }
 }
 
+function decodeHtml(s) {
+  return String(s)
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
 function parseParagraphs(html) {
   const paras = [], seen = new Set();
   const re = /<p[^>]*data-p-id="([^"]*)"[^>]*>([\s\S]*?)<\/p>/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
     const id = m[1];
-    const text = m[2].replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
+    const text = decodeHtml(m[2].replace(/<[^>]+>/g, "")).trim();
     if (text && !seen.has(id)) { seen.add(id); paras.push({ id, text }); }
   }
   if (paras.length === 0) {
     const re2 = /<p[^>]*>([\s\S]*?)<\/p>/gi;
     while ((m = re2.exec(html)) !== null) {
-      const text = m[1].replace(/<[^>]+>/g,"").trim();
+      const text = decodeHtml(m[1].replace(/<[^>]+>/g, "")).trim();
       if (text && text.length > 3) paras.push({ id: null, text });
     }
   }
@@ -172,7 +195,7 @@ function parseParagraphs(html) {
 async function fetchChapter(part) {
   const html = await fetchText(part.url);
   const titleMatch = html.match(/<h1[^>]*class="[^"]*h2[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g,"").trim() : part.title;
+  const title = titleMatch ? decodeHtml(titleMatch[1].replace(/<[^>]+>/g, "")).trim() : part.title;
   const info = extractTextUrlInfo(html);
   if (!info || !info.textUrl) return { title, paras: parseParagraphs(html) };
 
@@ -263,7 +286,7 @@ async function toEpub(meta, chapters) {
 // ══════════════════════════════════════════════════════════════
 // CORE DOWNLOAD
 // ══════════════════════════════════════════════════════════════
-async function downloadStory(url, formats, outputDir, state, stateFile, chapterSelection = null) {
+async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
   logLine(`\n${"─".repeat(60)}`);
   logLine(`📖 ${url}`);
   const storyId = extractStoryId(url);
@@ -281,8 +304,8 @@ async function downloadStory(url, formats, outputDir, state, stateFile, chapterS
   logLine(`   📚 ${meta.title}`);
   logLine(`   ✍  ${meta.user?.name || "Unknown"}`);
 
-  const selectedParts = chapterSelection
-    ? parts.filter((_, i) => chapterSelection.has(i + 1))
+  const selectedParts = opts.chapterSelection
+    ? parts.filter((_, i) => opts.chapterSelection.has(i + 1))
     : parts;
 
   logLine(`   📑 ${selectedParts.length}/${parts.length} chapters được chọn`);
@@ -292,6 +315,8 @@ async function downloadStory(url, formats, outputDir, state, stateFile, chapterS
     return c?.status === "done" && c?.paras?.length > 0;
   }).length;
   if (doneCount > 0) logLine(`   ✅ Resume: ${doneCount}/${selectedParts.length} chapters đã có trong cache`);
+
+  let saveCountdown = opts.saveEvery;
 
   for (let i = 0; i < selectedParts.length; i++) {
     const part = selectedParts[i];
@@ -313,9 +338,19 @@ async function downloadStory(url, formats, outputDir, state, stateFile, chapterS
       logLine(`   ✗ Lỗi: ${e.message}`);
       storyState.chapters[part.url] = { status: "error", title: part.title, paras: [{ text: `[Lỗi: ${e.message}]` }] };
     }
-    await saveState(stateFile, state);
-    if (i < selectedParts.length - 1) await sleep(THROTTLE_MS);
+
+    // save state theo lô
+    saveCountdown--;
+    if (saveCountdown <= 0) {
+      await saveState(stateFile, state);
+      saveCountdown = opts.saveEvery;
+    }
+
+    if (i < selectedParts.length - 1) await sleep(opts.throttleMs);
   }
+
+  // flush state
+  await saveState(stateFile, state);
 
   const chapters = selectedParts.map(part => {
     const cached = storyState.chapters[part.url];
@@ -350,7 +385,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v1.2
+Wattpad Downloader v1.5
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -361,12 +396,16 @@ Options:
   --state  <file>               (mặc định: ./state.json)
   --batch  <urls.txt>
   --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}'
+  --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS})
+  --save-every <n>              Save state mỗi n chapters tải mới (mặc định: ${DEFAULT_SAVE_EVERY})
 `);
     process.exit(0);
   }
 
   let formats = ["epub"], outputDir = "./output", stateFile = "./state.json";
   let batchFile = null, urls = [], chaptersMap = {};
+  let throttleMs = DEFAULT_THROTTLE_MS;
+  let saveEvery = DEFAULT_SAVE_EVERY;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -374,6 +413,8 @@ Options:
     else if (a === "--output"       && args[i+1]) outputDir = args[++i];
     else if (a === "--state"        && args[i+1]) stateFile = args[++i];
     else if (a === "--batch"        && args[i+1]) batchFile = args[++i];
+    else if (a === "--throttle-ms"  && args[i+1]) throttleMs = Math.max(0, parseInt(args[++i] || String(DEFAULT_THROTTLE_MS), 10));
+    else if (a === "--save-every"   && args[i+1]) saveEvery  = Math.max(1, parseInt(args[++i] || String(DEFAULT_SAVE_EVERY), 10));
     else if (a === "--chapters-map" && args[i+1]) {
       try {
         const raw = JSON.parse(args[++i]);
@@ -395,10 +436,11 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v1.2`);
+  console.log(`Wattpad Downloader v1.5`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
+  console.log(`Speed  : throttle=${throttleMs}ms | saveEvery=${saveEvery}`);
   console.log(`${"═".repeat(60)}`);
 
   const summary = { ok: [], fail: [] };
@@ -408,7 +450,14 @@ Options:
       if (Object.keys(chaptersMap).length) {
         try { selection = chaptersMap[extractStoryId(url)] ?? null; } catch {}
       }
-      const results = await downloadStory(url, formats, outputDir, state, stateFile, selection);
+      const results = await downloadStory(
+        url,
+        formats,
+        outputDir,
+        state,
+        stateFile,
+        { chapterSelection: selection, throttleMs, saveEvery }
+      );
       summary.ok.push({ url, files: results.filter(r=>r.ok).map(r=>r.filename) });
     } catch (e) {
       console.error(`\n❌ Lỗi story ${url}: ${e.message}`);
@@ -428,3 +477,4 @@ Options:
 }
 
 main().catch(e => { console.error("Lỗi:", e); process.exit(1); });
+
