@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Wattpad Downloader</title>
+<title>Ebook Downloader · Wattpad + BNS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -209,6 +209,14 @@ textarea{min-height:90px;line-height:1.7}
 .retry-all-msg{font-size:.78rem;color:var(--yellow);font-family:var(--mono)}
 .retry-all-btn{font-family:var(--mono);font-size:.72rem;background:rgba(255,211,42,.12);border:1px solid rgba(255,211,42,.3);color:var(--yellow);border-radius:6px;padding:5px 12px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .retry-all-btn:hover{background:rgba(255,211,42,.22)}
+
+/* SOURCE TABS */
+.source-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.source-tab{font-family:var(--mono);font-size:.75rem;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted2);cursor:pointer;transition:all .15s}
+.source-tab:hover{border-color:var(--border2);color:var(--text)}
+.source-tab.on{background:rgba(255,107,53,.12);border-color:var(--accent);color:var(--accent2)}
+.source-panel{display:none}
+.source-panel.active{display:block}
 </style>
 </head>
 <body>
@@ -219,11 +227,11 @@ textarea{min-height:90px;line-height:1.7}
     <div class="logo-block">
       <div class="logo-icon">📚</div>
       <div class="logo-text">
-        <h1>Wattpad Downloader</h1>
-        <p>GitHub Actions · Server-side · Offline-ready</p>
+        <h1>Ebook Downloader</h1>
+        <p>Wattpad + Bạch Ngọc Sách · GitHub Actions</p>
       </div>
     </div>
-    <span class="version-badge">v1.4</span>
+    <span class="version-badge">v1.5</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -244,6 +252,7 @@ textarea{min-height:90px;line-height:1.7}
           <div class="guide-step"><b style="color:var(--text)">Repository access</b>: chọn repo <code>wattpad-downloader</code></div>
           <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> &nbsp;·&nbsp; <code>Contents → Read</code></div>
           <div class="guide-step">Copy token → paste vào ô bên dưới</div>
+          <div class="guide-step"><b style="color:var(--text)">BNS (Bạch Ngọc Sách)</b>: tạo Secrets <code>BNS_USERNAME</code> và <code>BNS_PASSWORD</code> trong repo (Settings → Secrets → Actions)</div>
         </div>
       </div>
       <div class="field-row">
@@ -266,7 +275,13 @@ textarea{min-height:90px;line-height:1.7}
   <div class="card">
     <div class="card-title" style="margin-bottom:16px"><span>⬇️</span> Yêu cầu tải</div>
 
-    <!-- URL INPUT -->
+    <div class="source-tabs">
+      <button type="button" class="source-tab on" id="tabWp" onclick="setSource('wattpad')">Wattpad</button>
+      <button type="button" class="source-tab" id="tabBns" onclick="setSource('bns')">Bạch Ngọc Sách</button>
+    </div>
+
+    <!-- WATTPAD -->
+    <div id="wpPanel" class="source-panel active">
     <div class="field">
       <label>URLs Wattpad <span style="color:var(--muted)">(mỗi dòng 1 URL)</span></label>
       <div class="url-input-row">
@@ -276,8 +291,27 @@ textarea{min-height:90px;line-height:1.7}
       <div class="hint" id="urlCount">Nhập URL để bắt đầu</div>
     </div>
 
-    <!-- STORY BLOCKS (chapter picker) -->
     <div id="storiesList" class="stories-list" style="margin-bottom:14px;display:none"></div>
+    </div>
+
+    <!-- BNS -->
+    <div id="bnsPanel" class="source-panel">
+    <div class="field">
+      <label>URL truyện BNS <span style="color:var(--muted)">(không dùng /muc-luc)</span></label>
+      <input type="text" id="inBnsStoryUrl" placeholder="https://bachngocsach.cc/reader/quy-bi-chi-chu" oninput="onBnsUrlChange()"/>
+      <div class="hint">Đăng nhập chạy trên GitHub qua Secrets <code>BNS_USERNAME</code> / <code>BNS_PASSWORD</code>. Workflow: <code>bns-download.yml</code></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>throttle_ms <span style="color:var(--muted)">(delay giữa chương)</span></label>
+        <input type="text" id="inBnsThrottle" value="900" oninput="updateTriggerBtn()"/>
+      </div>
+      <div class="field">
+        <label>save_every <span style="color:var(--muted)">(lưu state mỗi N chương)</span></label>
+        <input type="text" id="inBnsSaveEvery" value="5" oninput="updateTriggerBtn()"/>
+      </div>
+    </div>
+    </div>
 
     <!-- FORMAT -->
     <div class="field">
@@ -326,6 +360,7 @@ textarea{min-height:90px;line-height:1.7}
 // ════════════════════════════════════════
 const S = {
   owner:'', repo:'', pat:'',
+  source: 'wattpad', // 'wattpad' | 'bns'
   formats: new Set(['epub']),
   // storyId → { meta, selectedChapters: Set<number>|null }
   stories: new Map(),
@@ -343,6 +378,7 @@ const S = {
   document.getElementById('inRepo').value  = S.repo;
   document.getElementById('inPat').value   = S.pat;
   updateSetupStatus();
+  setSource(localStorage.getItem('dl_source') === 'bns' ? 'bns' : 'wattpad');
   updateTriggerBtn();
   if(S.owner&&S.repo&&S.pat){ collapseCard('setupCard'); loadRuns(); startPolling(); }
 })();
@@ -389,6 +425,16 @@ function togglePat(){
   const i=document.getElementById('inPat'); i.type=i.type==='password'?'text':'password';
 }
 
+function setSource(src){
+  S.source = src === 'bns' ? 'bns' : 'wattpad';
+  localStorage.setItem('dl_source', S.source);
+  document.getElementById('tabWp').classList.toggle('on', S.source === 'wattpad');
+  document.getElementById('tabBns').classList.toggle('on', S.source === 'bns');
+  document.getElementById('wpPanel').classList.toggle('active', S.source === 'wattpad');
+  document.getElementById('bnsPanel').classList.toggle('active', S.source === 'bns');
+  updateTriggerBtn();
+}
+
 // ════════════════════════════════════════
 // FORMAT
 // ════════════════════════════════════════
@@ -417,6 +463,26 @@ function parseUrls(){
 function extractStoryId(url){
   const m = url.match(/(?:story|chapter)\/(\d+)/);
   return m ? m[1] : null;
+}
+
+function parseBnsStoryUrl(){
+  let u = document.getElementById('inBnsStoryUrl').value.trim();
+  if(!u) return null;
+  if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try {
+    const url = new URL(u);
+    const h = url.hostname.replace(/^www\./i, '');
+    if(!h.includes('bachngocsach')) return null;
+    if(!url.pathname.includes('/reader/')) return null;
+    return url.href.replace(/#.*$/, '');
+  } catch { return null; }
+}
+function onBnsUrlChange(){
+  const el = document.getElementById('inBnsStoryUrl');
+  const ok = !!parseBnsStoryUrl();
+  if(el.value.trim() && !ok) el.style.borderColor = 'var(--red, #f85149)';
+  else el.style.borderColor = '';
+  updateTriggerBtn();
 }
 
 // ════════════════════════════════════════
@@ -763,17 +829,30 @@ function updateStorySelCount(sid){
 // ARTIFACT NAME
 // ════════════════════════════════════════
 function suggestName(){
-  const urls=parseUrls();
   const date=new Date().toISOString().slice(0,10);
   let name='';
-  if(!urls.length) name=`wattpad_${date}`;
-  else if(urls.length===1){
-    const m=urls[0].match(/story\/\d+-([^/?]+)/);
-    const slug=m?m[1].slice(0,40):'story';
-    name=`${slug}_${date}`;
-  } else name=`batch-${urls.length}-stories_${date}`;
+  let hint='';
+  if(S.source==='bns'){
+    const bu=parseBnsStoryUrl();
+    if(!bu){ name=`bns_${date}`; hint='✨ Tên mặc định (chưa có URL hợp lệ)'; }
+    else {
+      const m=bu.match(/\/reader\/([^/?#]+)/);
+      const slug=m?m[1].slice(0,40):'story';
+      name=`${slug}_${date}`;
+      hint='✨ Tự sinh từ URL BNS';
+    }
+  } else {
+    const urls=parseUrls();
+    if(!urls.length){ name=`wattpad_${date}`; hint='✨ Tên mặc định'; }
+    else if(urls.length===1){
+      const m=urls[0].match(/story\/\d+-([^/?]+)/);
+      const slug=m?m[1].slice(0,40):'story';
+      name=`${slug}_${date}`;
+      hint='✨ Tự sinh từ 1 URL';
+    } else { name=`batch-${urls.length}-stories_${date}`; hint=`✨ Tự sinh từ ${urls.length} URL`; }
+  }
   document.getElementById('inArtifactName').value=name;
-  document.getElementById('nameHint').textContent=`✨ Tự sinh từ ${urls.length} URL`;
+  document.getElementById('nameHint').textContent=hint;
 }
 
 // ════════════════════════════════════════
@@ -797,20 +876,53 @@ function buildChaptersMap(){
 // TRIGGER
 // ════════════════════════════════════════
 function updateTriggerBtn(){
-  const ready = S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0;
+  let ready=false;
+  if(S.source==='wattpad'){
+    ready = !!(S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0);
+  } else {
+    const th=document.getElementById('inBnsThrottle').value.trim();
+    const sv=document.getElementById('inBnsSaveEvery').value.trim();
+    const n1=parseInt(th,10), n2=parseInt(sv,10);
+    const numsOk = th!=='' && sv!=='' && !Number.isNaN(n1) && !Number.isNaN(n2) && n1>=0 && n2>=1;
+    ready = !!(S.owner && S.repo && S.pat && parseBnsStoryUrl() && S.formats.size>0 && numsOk);
+  }
   document.getElementById('btnTrigger').disabled=!ready;
 }
 
 async function triggerWorkflow(){
-  const urls=parseUrls();
   const fmtStr=[...S.formats].join(',');
   let artName=document.getElementById('inArtifactName').value.trim();
   if(!artName){ suggestName(); artName=document.getElementById('inArtifactName').value.trim(); }
 
-  const chaptersMap = buildChaptersMap();
-
   setBtnLoading(true);
   try {
+    if(S.source==='bns'){
+      const storyUrl=parseBnsStoryUrl();
+      if(!storyUrl){ toast('URL Bạch Ngọc Sách không hợp lệ (cần …/reader/… trên bachngocsach.cc)','error'); return; }
+      let t=parseInt(document.getElementById('inBnsThrottle').value.trim(),10);
+      if(Number.isNaN(t)) t=900;
+      let s=parseInt(document.getElementById('inBnsSaveEvery').value.trim(),10);
+      if(Number.isNaN(s)) s=5;
+      const throttle_ms=String(Math.max(0,t));
+      const save_every=String(Math.max(1,s));
+      const inputs={ story_url: storyUrl, format: fmtStr, artifact_name: artName, throttle_ms, save_every };
+      const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/bns-download.yml/dispatches`,{
+        method:'POST', body:JSON.stringify({ ref:'main', inputs })
+      });
+      if(res.status===204){
+        toast('🚀 Đã kích hoạt BNS! Đang chờ GitHub...','success');
+        document.getElementById('inBnsStoryUrl').value='';
+        onBnsUrlChange();
+        setTimeout(loadRuns,3000);
+      } else {
+        const err=await res.json().catch(()=>({}));
+        toast(`Lỗi ${res.status}: ${err.message||'Không trigger được'}`, 'error');
+      }
+      return;
+    }
+
+    const urls=parseUrls();
+    const chaptersMap = buildChaptersMap();
     const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName };
     if(chaptersMap) inputs.chapters_map = chaptersMap;
 
@@ -829,7 +941,7 @@ async function triggerWorkflow(){
       toast(`Lỗi ${res.status}: ${err.message||'Không trigger được'}`, 'error');
     }
   } catch(e){ toast(`Lỗi kết nối: ${e.message}`,'error'); }
-  finally{ setBtnLoading(false); }
+  finally{ setBtnLoading(false); updateTriggerBtn(); }
 }
 
 function setBtnLoading(on){
@@ -844,12 +956,18 @@ function setBtnLoading(on){
 async function loadRuns(){
   if(!S.owner||!S.repo||!S.pat) return;
   try {
-    const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/runs?per_page=8`);
-    if(!res.ok){ renderRuns([]); return; }
-    const data=await res.json();
-    renderRuns(data.workflow_runs||[]);
-    maybeAdjustPolling(data.workflow_runs||[]);
-  } catch {}
+    const [wpRes,bnsRes]=await Promise.all([
+      ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/runs?per_page=8`),
+      ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/bns-download.yml/runs?per_page=8`)
+    ]);
+    let merged=[];
+    if(wpRes.ok){ const d=await wpRes.json(); merged=merged.concat(d.workflow_runs||[]); }
+    if(bnsRes.ok){ const d=await bnsRes.json(); merged=merged.concat(d.workflow_runs||[]); }
+    merged.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    merged=merged.slice(0,16);
+    renderRuns(merged);
+    maybeAdjustPolling(merged);
+  } catch { renderRuns([]); }
 }
 
 function renderRuns(runs){
@@ -866,11 +984,13 @@ function renderRuns(runs){
       ? `<button class="run-link dl" onclick="downloadArtifact(this,${run.id})" title="Tải artifact về máy">⬇ Tải về</button>`
       : '';
 
+    const wfKind=(run.path||'').includes('bns-download')?'BNS':'Wattpad';
     return `<div class="run-item" id="run-${run.id}">
       <div class="run-status-icon">${icon}</div>
       <div class="run-info">
-        <div class="run-name">#${run.run_number} — ${escHtml(run.display_title||run.head_commit?.message||'Wattpad Download')}</div>
+        <div class="run-name">#${run.run_number} — ${escHtml(run.display_title||run.head_commit?.message||run.name||'Download')}</div>
         <div class="run-meta">
+          <span class="run-badge badge-queued" style="opacity:.85">${wfKind}</span>
           <span class="run-badge ${cls}">${badge}</span>
           <span>${time}</span>
           ${dur?`<span>${dur}</span>`:''}
