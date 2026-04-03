@@ -223,7 +223,7 @@ textarea{min-height:90px;line-height:1.7}
         <p>GitHub Actions · Server-side · Offline-ready</p>
       </div>
     </div>
-    <span class="version-badge">v1.3</span>
+    <span class="version-badge">v1.4</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -420,7 +420,7 @@ function extractStoryId(url){
 }
 
 // ════════════════════════════════════════
-// LOAD STORIES + CHAPTER PICKER  (v1.3)
+// LOAD STORIES + CHAPTER PICKER  (v1.4)
 // ════════════════════════════════════════
 
 // Lưu trạng thái từng URL: 'loading'|'ok'|'error'
@@ -461,35 +461,17 @@ async function fetchStoryMeta_safe(url){
   urlStates.set(url, {status:'loading', url});
   renderBlockForUrl(url);
   try {
-    const sid = extractStoryIdFromUrl(url) || extractStoryIdFallback(url);
+    const sid = extractStoryIdFromUrl(url);
+    if(!sid) throw {msg:'Không tìm được Story ID từ URL', code:0};
     const apiUrl = `https://www.wattpad.com/api/v3/stories/${sid}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`;
 
     let meta = null, lastErr = '', lastCode = 0;
 
-    // 1) Direct fetch
+    // unified fetch: direct → proxy
     try {
-      const res = await fetch(apiUrl);
-      lastCode = res.status;
-      if(res.ok){
-        meta = await res.json();
-      } else {
-        lastErr = classifyHttpError(res.status);
-      }
-    } catch(e){ lastErr = 'Lỗi kết nối (CORS/mạng)'; }
-
-    // 2) Proxy fallback nếu direct thất bại
-    if(!meta){
-      try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
-        const res2 = await fetch(proxyUrl);
-        if(res2.ok){
-          const d = await res2.json();
-          if(d.contents){ meta = JSON.parse(d.contents); lastErr=''; }
-          else lastErr = lastErr || 'Proxy trả về rỗng';
-        } else {
-          lastErr = lastErr || `Proxy lỗi ${res2.status}`;
-        }
-      } catch(e){ lastErr = lastErr || 'Proxy timeout / không phản hồi'; }
+      meta = await fetchViaProxy(apiUrl, true);
+    } catch(e) {
+      lastErr = e?.message || 'Không lấy được metadata';
     }
 
     if(!meta) throw {msg: lastErr||'Không lấy được metadata', code: lastCode};
@@ -515,13 +497,55 @@ function classifyHttpError(status){
   return `HTTP ${status}`;
 }
 
-function extractStoryIdFromUrl(url){
-  const m = url.match(/story\/(\d+)/);
-  return m ? m[1] : null;
+function normalizeUrl(raw){
+  const s = String(raw||'').trim();
+  if(!s) return '';
+  if(/^https?:\/\//i.test(s)) return s;
+  return 'https://' + s.replace(/^\/+/, '');
 }
-function extractStoryIdFallback(url){
-  const m = url.match(/\/(\d{5,})/);
-  return m ? m[1] : '0';
+
+function extractStoryIdFromUrl(url){
+  // Robust like v1.8: pick any path segment starting with digits
+  try{
+    const u = new URL(normalizeUrl(url));
+    for(const seg of u.pathname.split('/').filter(Boolean)){
+      const m = seg.match(/^(\d{4,})/);
+      if(m) return m[1];
+    }
+    const m2 = u.pathname.match(/\/(\d{5,})/);
+    return m2 ? m2[1] : null;
+  }catch{
+    const m = String(url||'').match(/\/(\d{5,})/);
+    return m ? m[1] : null;
+  }
+}
+
+async function fetchViaProxy(url, json=false){
+  // direct → fallback allorigins (helps CORS / intermittent failures)
+  const headers = json ? { Accept:'application/json' } : { Accept:'text/html' };
+  try{
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    if(res.ok) return json ? res.json() : res.text();
+  }catch{}
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const res2 = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
+  if(!res2.ok) throw new Error(`Proxy lỗi ${res2.status}`);
+  const d = await res2.json();
+  if(json){
+    try{ return JSON.parse(d.contents); }catch{ throw new Error('JSON parse thất bại'); }
+  }
+  return d.contents;
+}
+
+function urlKey(url){
+  // stable, DOM-safe key (no ":" "/" etc.)
+  let h = 2166136261;
+  const s = String(url||'');
+  for(let i=0;i<s.length;i++){
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return 'u' + (h >>> 0).toString(16);
 }
 
 // Render toàn bộ list (dùng khi init / reload)
@@ -575,9 +599,9 @@ function renderLoadingBlock(url){
 }
 
 function renderErrorBlock(st){
-  const safeUrl = escAttr(st.url);
+  const key = urlKey(st.url);
   const dispUrl = st.url.replace('https://www.wattpad.com/','');
-  return `<div class="err-block" data-url="${safeUrl}" id="eb-${safeUrl}">
+  return `<div class="err-block" data-url="${escAttr(st.url)}" id="eb-${key}">
     <div class="err-block-hdr">
       <div class="err-icon">⚠️</div>
       <div class="err-info">
@@ -591,8 +615,8 @@ function renderErrorBlock(st){
         <button class="err-btn err-btn-del"   onclick="deleteUrl(${JSON.stringify(st.url)})">✕</button>
       </div>
     </div>
-    <div class="err-edit-row" id="edit-row-${safeUrl}" style="display:none">
-      <input type="text" id="edit-inp-${safeUrl}" value="${escHtml(st.url)}" placeholder="https://www.wattpad.com/story/..."/>
+    <div class="err-edit-row" id="edit-row-${key}" style="display:none">
+      <input type="text" id="edit-inp-${key}" value="${escHtml(st.url)}" placeholder="https://www.wattpad.com/story/..."/>
       <button class="err-btn-confirm" onclick="confirmEditUrl(${JSON.stringify(st.url)})">✓ Tải lại</button>
     </div>
   </div>`;
@@ -608,19 +632,19 @@ async function retryUrl(url){
 }
 
 function editUrl(btn, url){
-  const safeUrl = escAttr(url);
-  const row = document.getElementById('edit-row-'+safeUrl);
+  const key = urlKey(url);
+  const row = document.getElementById('edit-row-'+key);
   if(!row) return;
   const isOpen = row.style.display !== 'none';
   row.style.display = isOpen ? 'none' : 'flex';
-  if(!isOpen) document.getElementById('edit-inp-'+safeUrl)?.focus();
+  if(!isOpen) document.getElementById('edit-inp-'+key)?.focus();
 }
 
 async function confirmEditUrl(oldUrl){
-  const safeUrl = escAttr(oldUrl);
-  const inp = document.getElementById('edit-inp-'+safeUrl);
+  const key = urlKey(oldUrl);
+  const inp = document.getElementById('edit-inp-'+key);
   if(!inp) return;
-  const newUrl = inp.value.trim();
+  const newUrl = normalizeUrl(inp.value);
   if(!newUrl || !newUrl.includes('wattpad.com')){ toast('URL không hợp lệ','error'); return; }
 
   // Cập nhật textarea URLs
@@ -918,8 +942,7 @@ async function downloadArtifact(btn, runId){
 
 async function triggerArtifactDownload(artifactId, name){
   // GitHub API trả về redirect 302 → URL tải thật
-  const res=await ghApi(`/repos/${S.owner}/${S.repo}/actions/artifacts/${artifactId}/zip`,{redirect:'manual'});
-  // fetch với redirect:manual không hoạt động trong browser → dùng window.open với header
+  await ghApi(`/repos/${S.owner}/${S.repo}/actions/artifacts/${artifactId}/zip`,{redirect:'manual'});
   // Workaround: dùng fetch lấy blob
   const res2=await fetch(`https://api.github.com/repos/${S.owner}/${S.repo}/actions/artifacts/${artifactId}/zip`,{
     headers:{ 'Authorization':`Bearer ${S.pat}`, 'X-GitHub-Api-Version':'2022-11-28' }
