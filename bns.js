@@ -113,11 +113,49 @@ async function fetchWithRetry(url, opts = {}, jar = null) {
 }
 
 async function loginBns({ username, password, jar }) {
-  const loginPageUrl = `${BASE}/forum/login?redirect=%2Freader%2Findex`;
-  const loginPage = await (await fetchWithRetry(loginPageUrl, {}, jar)).text();
+  const loginPageUrl = `${BASE}/forum/login?redirect=${encodeURIComponent("/reader/index")}`;
+  const acceptHtml = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
-  const token = loginPage.match(/name="_xfToken"\s+value="([^"]+)"/i)?.[1] || "";
-  const action = loginPage.match(/<form[^>]+action="([^"]+login\/login[^"]*)"/i)?.[1] || "/forum/login/login";
+  try {
+    await fetchWithRetry(BASE + "/", { headers: { Accept: acceptHtml } }, jar);
+  } catch {
+    /* một số host vẫn cho phép login nếu bỏ qua warmup */
+  }
+
+  const loginRes = await fetchWithRetry(loginPageUrl, { headers: { Accept: acceptHtml } }, jar);
+  const pageUrlForForm = loginRes.url || loginPageUrl;
+  const loginPage = await loginRes.text();
+
+  // Trang "You are already logged in" (XenForo) thường không còn form — thử đọc reader trước khi báo lỗi token
+  const hasToken = /name="_xfToken"/i.test(loginPage);
+  if (!hasToken) {
+    const alreadyMsg =
+      /already logged in|You are already logged in|B\u1ea1n \u0111ã \u0111\u0103ng nh\u1eadp/i.test(loginPage) ||
+      /class="isLoggedIn"/i.test(loginPage);
+    if (alreadyMsg) {
+      const probe = await (await fetchWithRetry(`${BASE}/reader`, { headers: { Accept: acceptHtml } }, jar)).text();
+      if (!(/Đăng nhập/i.test(probe) && /forum\/login/i.test(probe))) return true;
+    }
+  }
+
+  const token =
+    loginPage.match(/name="_xfToken"\s+value="([^"]+)"/i)?.[1] ||
+    loginPage.match(/value="([^"]+)"\s+name="_xfToken"/i)?.[1] ||
+    "";
+  const actionRaw =
+    loginPage.match(/<form[^>]+action="([^"]+)"[^>]*method\s*=\s*"post"/i)?.[1] ||
+    loginPage.match(/<form[^>]+method\s*=\s*"post"[^>]*action="([^"]+)"/i)?.[1] ||
+    loginPage.match(/action="(\/forum\/login\/login[^"]*)"/i)?.[1] ||
+    "/forum/login/login";
+
+  let postUrl;
+  try {
+    postUrl = new URL(actionRaw.trim(), pageUrlForForm).href;
+  } catch {
+    postUrl = actionRaw.startsWith("http")
+      ? actionRaw
+      : `${BASE}${actionRaw.startsWith("/") ? "" : "/"}${actionRaw}`;
+  }
 
   if (!token) throw new Error("Không lấy được _xfToken từ trang login.");
 
@@ -128,15 +166,49 @@ async function loginBns({ username, password, jar }) {
   form.set("_xfRedirect", `${BASE}/reader/index`);
   form.set("_xfToken", token);
 
-  const postUrl = action.startsWith("http") ? action : `${BASE}${action.startsWith("/") ? "" : "/"}${action}`;
-  const res = await fetchWithRetry(postUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  }, jar);
+  const postHeaders = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: acceptHtml,
+    Referer: pageUrlForForm,
+    Origin: BASE,
+  };
 
-  // XenForo thường redirect sau login; kiểm tra bằng cách truy cập reader page
-  const check = await (await fetchWithRetry(`${BASE}/reader`, {}, jar)).text();
+  const postOnce = async url => {
+    const res = await fetch(url, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        ...HEADERS,
+        ...(jar.header() ? { Cookie: jar.header() } : {}),
+        ...postHeaders,
+        Referer: pageUrlForForm,
+      },
+      body: form.toString(),
+      signal: AbortSignal.timeout(45000),
+    });
+    jar.setFromResponse(res);
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}: ${url}`);
+      err.status = res.status;
+      throw err;
+    }
+    await res.text();
+  };
+
+  try {
+    await postOnce(postUrl);
+  } catch (e) {
+    const st = e?.status;
+    const is404 = st === 404 || /HTTP 404:/.test(String(e.message));
+    const fallback = `${BASE}/forum/login/login`;
+    if (is404 && postUrl !== fallback) {
+      await postOnce(fallback);
+    } else {
+      throw e;
+    }
+  }
+
+  const check = await (await fetchWithRetry(`${BASE}/reader`, { headers: { Accept: acceptHtml } }, jar)).text();
   if (/Đăng nhập/i.test(check) && /forum\/login/i.test(check)) {
     throw new Error("Login thất bại (vẫn bị yêu cầu đăng nhập). Kiểm tra BNS_USERNAME/BNS_PASSWORD.");
   }
