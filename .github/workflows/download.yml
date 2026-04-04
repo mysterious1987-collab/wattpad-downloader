@@ -1,4 +1,4 @@
-name: Wattpad Downloader v1.8
+name: Wattpad Downloader v1.9
 
 on:
   workflow_dispatch:
@@ -45,10 +45,19 @@ on:
         type: string
 
       max_part_mb:
-        description: 'TXT/MD/JSON — tối đa MB mỗi file phần (UTF-8). 0 = một file. Ví dụ 20'
+        description: 'TXT/MD/JSON (gộp merged) — tối đa MB mỗi file phần. 0 = một file. per_chapter bỏ qua.'
         required: false
         default: '0'
         type: string
+
+      text_layout:
+        description: 'TXT/MD/JSON — merged (gộp + max_part_mb) hoặc per_chapter (mỗi chương một file)'
+        required: false
+        default: 'merged'
+        type: choice
+        options:
+          - merged
+          - per_chapter
 
 jobs:
   download:
@@ -99,11 +108,16 @@ jobs:
           THROTTLE_MS="${{ github.event.inputs.throttle_ms || '900' }}"
           SAVE_EVERY="${{ github.event.inputs.save_every || '5' }}"
           MAX_PART_MB="${{ github.event.inputs.max_part_mb || '0' }}"
+          TEXT_LAYOUT="${{ github.event.inputs.text_layout || 'merged' }}"
 
           CMD="node wattpad.js --batch urls_run.txt --format \"$FORMAT\" --output ./output --state ./state.json --throttle-ms \"$THROTTLE_MS\" --save-every \"$SAVE_EVERY\""
 
           if [ -n "$CHAPTERS_MAP" ]; then
             CMD="$CMD --chapters-map '$CHAPTERS_MAP'"
+          fi
+
+          if [ "$TEXT_LAYOUT" = "per_chapter" ]; then
+            CMD="$CMD --text-layout per-chapter"
           fi
 
           if [ -n "$MAX_PART_MB" ] && [ "$MAX_PART_MB" != "0" ] && [ "$MAX_PART_MB" != "0.0" ]; then
