@@ -19,7 +19,7 @@ Mục tiêu: chạy tải **trên GitHub Actions**, rồi bạn tải file về 
    - **urls**: dán URL (mỗi dòng 1). Nếu để trống thì workflow dùng `urls.txt`
    - **text_layout**: `merged` (mặc định) hoặc `per_chapter` — chỉ ảnh hưởng txt/md/json; gộp thì dùng **max_part_mb** như v1.8
    - **throttle_ms**: mặc định `900` (áp dụng sau khi tải chapter qua mạng, không chờ giữa các chapter chỉ đọc cache)
-   - **save_every**: mặc định `5` (tăng = nhanh hơn do giảm IO, nhưng rủi ro mất tối đa N chapters nếu job chết)
+   - **save_every**: mặc định `1` (mỗi chapter tải mạng ghi state — resume ổn định trên Actions). Tăng (vd. `5`) để giảm IO, rủi ro mất tối đa N−1 chapter nếu job chết giữa chừng
 4) Chờ run xong → tải artifact trong trang run
 
 ### Bạch Ngọc Sách (BNS) — có login
