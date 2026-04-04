@@ -39,9 +39,9 @@ on:
         type: string
 
       save_every:
-        description: 'Save state mỗi N chapters tải mới (giảm IO → nhanh hơn)'
+        description: 'Ghi state sau mỗi N chapter tải mạng (1 = mỗi chapter, resume Actions ổn định; 5 = ít IO hơn)'
         required: false
-        default: '5'
+        default: '1'
         type: string
 
       max_part_mb:
@@ -138,7 +138,7 @@ jobs:
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
           CHAPTERS_MAP="${{ github.event.inputs.chapters_map }}"
           THROTTLE_MS="${{ github.event.inputs.throttle_ms || '900' }}"
-          SAVE_EVERY="${{ github.event.inputs.save_every || '5' }}"
+          SAVE_EVERY="${{ github.event.inputs.save_every || '1' }}"
           MAX_PART_MB="${{ github.event.inputs.max_part_mb || '0' }}"
           TEXT_LAYOUT="${{ github.event.inputs.text_layout || 'merged' }}"
 
