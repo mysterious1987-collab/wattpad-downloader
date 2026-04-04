@@ -21,4 +21,6 @@
   npm install
 
 [Ghi chú v2.0]
-  index.html: buildChaptersMap() đọc .chapter-item.selected trên DOM; renderStoryBlock() khôi phục checkbox từ S.stories.selectedChapters.
+  index.html: 2 nút Wattpad — toàn bộ vs theo chọn; chapters_map từ DOM; renderStoryBlock() khớp S.stories.
+  download.yml: CHAPTERS_MAP qua env → chapters_map_run.json → --chapters-map-file (tránh vỡ JSON trong bash).
+  wattpad.js: --chapters-map-file

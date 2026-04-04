@@ -695,7 +695,8 @@ Options:
   --output <dir>                (mặc định: ./output)
   --state  <file>               (mặc định: ./state.json)
   --batch  <urls.txt>
-  --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}'
+  --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}' (CLI; trên Actions dùng file)
+  --chapters-map-file <path>   Đọc JSON map từ file (tránh lỗi quote trong bash/GitHub Actions)
   --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS}; chỉ sau request mạng)
   --save-every <n>              Ghi state sau mỗi n chapter tải mạng (mặc định: ${DEFAULT_SAVE_EVERY} = mỗi chapter). N>1 giảm IO
   --max-part-mb <số>            TXT/MD/JSON (chế độ gộp): tối đa MB mỗi phần. 0 = một file. Vd: 20
@@ -705,7 +706,7 @@ Options:
   }
 
   let formats = ["epub"], outputDir = "./output", stateFile = "./state.json";
-  let batchFile = null, urls = [], chaptersMap = {};
+  let batchFile = null, urls = [], chaptersMap = {}, chaptersMapFile = null;
   let throttleMs = DEFAULT_THROTTLE_MS;
   let saveEvery = DEFAULT_SAVE_EVERY;
   let maxPartMb = 0;
@@ -733,7 +734,22 @@ Options:
         const raw = JSON.parse(args[++i]);
         for (const [sid, sel] of Object.entries(raw)) chaptersMap[sid] = parseChapterSelection(sel);
       } catch (e) { console.error("⚠ --chapters-map không hợp lệ:", e.message); }
-    } else if (!a.startsWith("--")) urls.push(a);
+    }
+    else if (a === "--chapters-map-file" && args[i+1]) chaptersMapFile = args[++i];
+    else if (!a.startsWith("--")) urls.push(a);
+  }
+
+  if (chaptersMapFile) {
+    try {
+      const raw = JSON.parse(await fs.readFile(path.resolve(chaptersMapFile), "utf8"));
+      chaptersMap = {};
+      for (const [sid, sel] of Object.entries(raw)) {
+        chaptersMap[sid] = parseChapterSelection(typeof sel === "string" ? sel : String(sel));
+      }
+    } catch (e) {
+      console.error("⚠ --chapters-map-file không hợp lệ:", e.message);
+      chaptersMap = {};
+    }
   }
 
   if (!formats.length) { console.error("❌ Format không hợp lệ"); process.exit(1); }
@@ -761,6 +777,7 @@ Options:
   }
   if (maxPartMb > 0 && textLayout !== "per-chapter") console.log(`Parts  : TXT/MD/JSON gộp — tối đa ~${maxPartMb} MB/phần (UTF-8)`);
   if (maxPartMb > 0 && textLayout === "per-chapter") console.log(`Parts  : max_part_mb bỏ qua khi per-chapter (mỗi file = một chương)`);
+  if (Object.keys(chaptersMap).length) console.log(`Map    : chapters_map (${Object.keys(chaptersMap).length} story)`);
   console.log(`${"═".repeat(60)}`);
 
   const summary = { ok: [], fail: [] };
