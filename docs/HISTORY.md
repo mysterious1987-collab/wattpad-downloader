@@ -2,8 +2,10 @@
 
 ### v2.0 (2026-04-04)
 
-- **Fix UI → Actions**: `chapters_map` sinh từ **DOM** (đúng checkbox đang hiển thị), không chỉ dựa `S.stories` dễ lệch sau `renderAllBlocks`. Re-render block chương đọc `selectedChapters` từ `S.stories` để giữ UI.
-- Log Wattpad: khi có `chapters_map`, dòng `📑 … chapters (theo chapters_map / UI)`.
+- **Hai nút Wattpad**: «Tải toàn bộ các chapter» (không gửi `chapters_map`) và «Tải từ các chapter được chọn» (gửi map từ DOM).
+- **Fix JSON trên Actions**: `CHAPTERS_MAP` qua biến môi trường + `printf` → file + `--chapters-map-file` (tránh bash `CHAPTERS_MAP="{...}"` vỡ vì dấu `"` trong JSON → `JSON … position 1`).
+- **Fix UI → Actions**: `chapters_map` từ DOM; re-render đọc `S.stories.selectedChapters`.
+- Log Wattpad: có map → `📑 … (theo chapters_map / UI)`; startup log `Map : chapters_map`.
 - Gói **`Object Github/v2.0`**: snapshot repo đầy đủ.
 
 ### v1.9 (2026-04-03)

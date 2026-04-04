@@ -92,6 +92,12 @@ textarea{min-height:90px;line-height:1.7}
 .btn-primary:hover:not(:disabled){background:var(--accent2);box-shadow:0 4px 24px rgba(255,107,53,.4);transform:translateY(-1px)}
 .btn-primary:active:not(:disabled){transform:translateY(0)}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.wp-dl-actions{display:none;flex-direction:column;gap:10px;margin-top:18px}
+.wp-dl-actions.visible{display:flex}
+.wp-dl-actions .btn-primary{margin-top:0}
+.btn-secondary{width:100%;background:transparent;color:var(--accent2);border:2px solid var(--accent);border-radius:10px;padding:12px;font-family:var(--mono);font-size:.88rem;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-secondary:hover:not(:disabled){background:rgba(255,107,53,.12);box-shadow:0 2px 16px rgba(255,107,53,.2)}
+.btn-secondary:disabled{opacity:.4;cursor:not-allowed}
 .btn-sm{background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:7px;padding:6px 11px;font-family:var(--mono);font-size:.72rem;cursor:pointer;transition:all .15s}
 .btn-sm:hover{border-color:var(--border2);color:var(--text)}
 
@@ -369,8 +375,17 @@ textarea{min-height:90px;line-height:1.7}
       <div class="hint" id="nameHint">Tên dùng khi tải artifact về</div>
     </div>
 
-    <button class="btn-primary" id="btnTrigger" onclick="triggerWorkflow()" disabled>
-      <span id="btnIcon">🚀</span><span id="btnText">Bắt đầu tải</span>
+    <div id="wpDlActions" class="wp-dl-actions">
+      <button type="button" class="btn-primary" id="btnWpAll" onclick="triggerWorkflow('wattpad_all')" disabled>
+        <span id="btnIconWpAll">📚</span><span id="btnTextWpAll">Tải toàn bộ các chapter</span>
+      </button>
+      <button type="button" class="btn-secondary" id="btnWpSel" onclick="triggerWorkflow('wattpad_selected')" disabled>
+        <span id="btnIconWpSel">✅</span><span id="btnTextWpSel">Tải từ các chapter được chọn</span>
+      </button>
+      <div class="hint" style="margin-top:0">«Toàn bộ» không gửi <code>chapters_map</code>. «Được chọn» cần đã bấm <b>Xem chapters</b>; repo phải có <code>wattpad.js</code> + workflow hỗ trợ <code>--chapters-map-file</code> (v2.0).</div>
+    </div>
+    <button type="button" class="btn-primary" id="btnTriggerBns" onclick="triggerWorkflow('bns')" disabled style="display:none;margin-top:18px">
+      <span id="btnIconBns">🚀</span><span id="btnTextBns">Bắt đầu tải BNS</span>
     </button>
   </div>
 
@@ -472,6 +487,9 @@ function setSource(src){
   document.getElementById('tabBns').classList.toggle('on', S.source === 'bns');
   document.getElementById('wpPanel').classList.toggle('active', S.source === 'wattpad');
   document.getElementById('bnsPanel').classList.toggle('active', S.source === 'bns');
+  document.getElementById('wpDlActions').classList.toggle('visible', S.source === 'wattpad');
+  const bnsBtn = document.getElementById('btnTriggerBns');
+  bnsBtn.style.display = S.source === 'bns' ? 'block' : 'none';
   updateTriggerBtn();
 }
 
@@ -929,11 +947,11 @@ function suggestName(){
 }
 
 // ════════════════════════════════════════
-// BUILD chapters_map JSON (đọc từ DOM — khớp những gì user đang thấy; tránh lệch S.stories)
+// BUILD chapters_map từ DOM (nút «Tải từ các chapter được chọn»). Luôn có 'all' hoặc danh sách index.
 // ════════════════════════════════════════
-function buildChaptersMap(){
+function buildChaptersMapFromDomAlways(){
   const blocks = document.querySelectorAll('.story-block.loaded');
-  if(!blocks.length) return null;
+  if(!blocks.length) return { ok:false, err:'no_blocks' };
   const map = {};
   for(const block of blocks){
     const list = block.querySelector('.chapter-list');
@@ -946,13 +964,12 @@ function buildChaptersMap(){
     const total = items.length;
     const selected = items.filter(el => el.classList.contains('selected'));
     const sel = selected.length;
-    if(sel === 0) return false;
+    if(sel === 0) return { ok:false, err:'zero' };
     if(sel === total) map[sid] = 'all';
     else map[sid] = selected.map(el => parseInt(el.dataset.idx, 10)).sort((a,b)=>a-b).join(',');
   }
-  if(Object.keys(map).length === 0) return null;
-  if(Object.values(map).every(v => v === 'all')) return null;
-  return JSON.stringify(map);
+  if(Object.keys(map).length === 0) return { ok:false, err:'no_blocks' };
+  return { ok:true, json: JSON.stringify(map) };
 }
 
 function wattpadDomChaptersOk(){
@@ -970,33 +987,36 @@ function wattpadDomChaptersOk(){
 // TRIGGER
 // ════════════════════════════════════════
 function updateTriggerBtn(){
-  let ready=false;
+  const wth=document.getElementById('inWpThrottle').value.trim();
+  const wsv=document.getElementById('inWpSaveEvery').value.trim();
+  const wn1=parseInt(wth,10), wn2=parseInt(wsv,10);
+  const wNumsOk = wth!=='' && wsv!=='' && !Number.isNaN(wn1) && !Number.isNaN(wn2) && wn1>=0 && wn2>=1;
+  const wmp=document.getElementById('inWpMaxPartMb').value.trim().replace(',','.');
+  const wmpOk = wmp === '' || (!Number.isNaN(parseFloat(wmp)) && parseFloat(wmp) >= 0);
+  const wpBase = !!(S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0 && wNumsOk && wmpOk);
+
   if(S.source==='wattpad'){
-    const wth=document.getElementById('inWpThrottle').value.trim();
-    const wsv=document.getElementById('inWpSaveEvery').value.trim();
-    const wn1=parseInt(wth,10), wn2=parseInt(wsv,10);
-    const wNumsOk = wth!=='' && wsv!=='' && !Number.isNaN(wn1) && !Number.isNaN(wn2) && wn1>=0 && wn2>=1;
-    const wmp=document.getElementById('inWpMaxPartMb').value.trim().replace(',','.');
-    const wmpOk = wmp === '' || (!Number.isNaN(parseFloat(wmp)) && parseFloat(wmp) >= 0);
-    ready = !!(S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0 && wNumsOk && wmpOk && wattpadDomChaptersOk());
+    document.getElementById('btnWpAll').disabled = !wpBase;
+    const blocksLoaded = document.querySelectorAll('.story-block.loaded').length > 0;
+    document.getElementById('btnWpSel').disabled = !(wpBase && blocksLoaded && wattpadDomChaptersOk());
   } else {
     const th=document.getElementById('inBnsThrottle').value.trim();
     const sv=document.getElementById('inBnsSaveEvery').value.trim();
     const n1=parseInt(th,10), n2=parseInt(sv,10);
     const numsOk = th!=='' && sv!=='' && !Number.isNaN(n1) && !Number.isNaN(n2) && n1>=0 && n2>=1;
-    ready = !!(S.owner && S.repo && S.pat && parseBnsStoryUrl() && S.formats.size>0 && numsOk && bnsChapterRangeValid());
+    const ready = !!(S.owner && S.repo && S.pat && parseBnsStoryUrl() && S.formats.size>0 && numsOk && bnsChapterRangeValid());
+    document.getElementById('btnTriggerBns').disabled = !ready;
   }
-  document.getElementById('btnTrigger').disabled=!ready;
 }
 
-async function triggerWorkflow(){
+async function triggerWorkflow(mode){
   const fmtStr=[...S.formats].join(',');
   let artName=document.getElementById('inArtifactName').value.trim();
   if(!artName){ suggestName(); artName=document.getElementById('inArtifactName').value.trim(); }
 
-  setBtnLoading(true);
+  setBtnLoading(true, mode);
   try {
-    if(S.source==='bns'){
+    if(mode==='bns'){
       const storyUrl=parseBnsStoryUrl();
       if(!storyUrl){ toast('URL Bạch Ngọc Sách không hợp lệ (cần …/reader/… trên bachngocsach.cc)','error'); return; }
       let t=parseInt(document.getElementById('inBnsThrottle').value.trim(),10);
@@ -1026,11 +1046,6 @@ async function triggerWorkflow(){
     }
 
     const urls=parseUrls();
-    const chaptersMap = buildChaptersMap();
-    if(chaptersMap === false){
-      toast('Mỗi truyện cần chọn ít nhất 1 chương','error');
-      return;
-    }
     let wt=parseInt(document.getElementById('inWpThrottle').value.trim(),10);
     if(Number.isNaN(wt)) wt=900;
     let ws=parseInt(document.getElementById('inWpSaveEvery').value.trim(),10);
@@ -1047,14 +1062,23 @@ async function triggerWorkflow(){
     localStorage.setItem('wp_text_layout', text_layout);
     const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName, throttle_ms, save_every, max_part_mb };
     if (text_layout === 'per_chapter') inputs.text_layout = text_layout;
-    if(chaptersMap) inputs.chapters_map = chaptersMap;
+
+    if(mode==='wattpad_selected'){
+      const cm = buildChaptersMapFromDomAlways();
+      if(!cm.ok){
+        if(cm.err==='no_blocks') toast('Bấm «Xem chapters» trước, rồi chọn chương cần tải','error');
+        else toast('Mỗi truyện cần ít nhất 1 chương được chọn','error');
+        return;
+      }
+      inputs.chapters_map = cm.json;
+    }
 
     const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`,{
       method:'POST', body:JSON.stringify({ ref:'main', inputs })
     });
 
     if(res.status===204){
-      toast('🚀 Đã kích hoạt! Đang chờ GitHub...','success');
+      toast(mode==='wattpad_selected' ? '🚀 Đã gửi — tải theo chương đã chọn' : '🚀 Đã gửi — tải toàn bộ chapter','success');
       document.getElementById('inUrls').value='';
       document.getElementById('storiesList').style.display='none';
       S.stories.clear(); onUrlsChange();
@@ -1064,13 +1088,23 @@ async function triggerWorkflow(){
       toast(`Lỗi ${res.status}: ${err.message||'Không trigger được'}`, 'error');
     }
   } catch(e){ toast(`Lỗi kết nối: ${e.message}`,'error'); }
-  finally{ setBtnLoading(false); updateTriggerBtn(); }
+  finally{ setBtnLoading(false, mode); updateTriggerBtn(); }
 }
 
-function setBtnLoading(on){
-  document.getElementById('btnIcon').innerHTML=on?'<span class="spinner"></span>':'🚀';
-  document.getElementById('btnText').textContent=on?'Đang gửi...':'Bắt đầu tải';
-  document.getElementById('btnTrigger').disabled=on;
+function setBtnLoading(on, mode){
+  const spin='<span class="spinner"></span>';
+  if(mode==='bns'){
+    document.getElementById('btnIconBns').innerHTML=on?spin:'🚀';
+    document.getElementById('btnTextBns').textContent=on?'Đang gửi...':'Bắt đầu tải BNS';
+    document.getElementById('btnTriggerBns').disabled=on;
+  } else {
+    document.getElementById('btnIconWpAll').innerHTML=on?spin:'📚';
+    document.getElementById('btnTextWpAll').textContent=on?'Đang gửi...':'Tải toàn bộ các chapter';
+    document.getElementById('btnIconWpSel').innerHTML=on?spin:'✅';
+    document.getElementById('btnTextWpSel').textContent=on?'Đang gửi...':'Tải từ các chapter được chọn';
+    document.getElementById('btnWpAll').disabled=on;
+    document.getElementById('btnWpSel').disabled=on;
+  }
 }
 
 // ════════════════════════════════════════
