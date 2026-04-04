@@ -10,7 +10,7 @@ Chạy tải truyện Wattpad về **EPUB/TXT/Markdown/JSON** trên GitHub Actio
    - **format**: chọn định dạng xuất
    - **text_layout**: `merged` (gộp file, dùng **max_part_mb**) hoặc `per_chapter` (mỗi chương một file cho txt/md/json)
    - **throttle_ms**: mặc định `900` (chỉ sau request tải mạng; resume từ cache nhanh hơn)
-   - **save_every**: mặc định `5` (tăng để nhanh hơn do giảm IO)
+   - **save_every**: mặc định `1` (ghi state mỗi chapter tải mạng; tăng để giảm IO)
 3) Chờ run xong → tải artifact trong trang run
 
 ### Bạch Ngọc Sách (BNS) — có login

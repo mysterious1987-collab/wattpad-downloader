@@ -7,6 +7,7 @@
  * - Resume nhờ state.json cache + thư mục song song *-bodies (tránh JSON.stringify toàn truyện → Invalid string length).
  * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
  * - v1.9: sau chapter lấy từ cache không chờ throttle; TXT/MD/JSON — gộp file (max_part_mb như cũ) hoặc mỗi chương một file.
+ * - save_every mặc định 1: ghi state sau mỗi chapter tải mạng; --save-every N để gộp N chapter giảm IO.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -38,8 +39,8 @@ const PAGE_DELAY_MS = 300;
 const MAX_RETRIES = 4;
 const RETRY_DELAYS = [1500, 3500, 8000, 15000];
 
-// Save state theo lô để giảm IO (đặc biệt trong Actions)
-const DEFAULT_SAVE_EVERY = 5;
+// Sau mỗi N chapter tải mạng mới ghi state (N=1 = mỗi chapter; tăng để giảm IO)
+const DEFAULT_SAVE_EVERY = 1;
 
 /** Khi --max-part-mb > 0: mỗi file txt/md/json không vượt quá ~N MB (UTF-8). Tối thiểu 512 KiB nếu giá trị quá nhỏ. */
 const MIN_SPLIT_PART_BYTES = 512 * 1024;
@@ -589,7 +590,8 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
   }).length;
   if (doneCount > 0) logLine(`   ✅ Resume: ${doneCount}/${selectedParts.length} chapters đã có trong cache`);
 
-  let saveCountdown = opts.saveEvery;
+  const saveBatch = Math.max(1, opts.saveEvery);
+  let netChaptersSinceSave = 0;
 
   for (let i = 0; i < selectedParts.length; i++) {
     const part = selectedParts[i];
@@ -613,11 +615,10 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
         storyState.chapters[part.url] = { status: "error", title: part.title, paras: [{ text: `[Lỗi: ${e.message}]` }] };
       }
 
-      // save state theo lô (sau khi tải mới / lỗi mạng)
-      saveCountdown--;
-      if (saveCountdown <= 0) {
+      netChaptersSinceSave++;
+      if (netChaptersSinceSave >= saveBatch) {
         await saveState(stateFile, state);
-        saveCountdown = opts.saveEvery;
+        netChaptersSinceSave = 0;
       }
     }
 
@@ -692,7 +693,7 @@ Options:
   --batch  <urls.txt>
   --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}'
   --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS}; chỉ sau request mạng)
-  --save-every <n>              Save state mỗi n chapters tải mới (mặc định: ${DEFAULT_SAVE_EVERY})
+  --save-every <n>              Ghi state sau mỗi n chapter tải mạng (mặc định: ${DEFAULT_SAVE_EVERY} = mỗi chapter). N>1 giảm IO
   --max-part-mb <số>            TXT/MD/JSON (chế độ gộp): tối đa MB mỗi phần. 0 = một file. Vd: 20
   --text-layout merged|per-chapter   TXT/MD/JSON: gộp file (mặc định) hoặc mỗi chương một file (bỏ qua max_part khi per-chapter)
 `);
