@@ -134,29 +134,27 @@ jobs:
           echo "=== Hết diagnostics ==="
 
       - name: Download stories
+        env:
+          CHAPTERS_MAP: ${{ github.event.inputs.chapters_map }}
         run: |
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
-          CHAPTERS_MAP="${{ github.event.inputs.chapters_map }}"
           THROTTLE_MS="${{ github.event.inputs.throttle_ms || '900' }}"
           SAVE_EVERY="${{ github.event.inputs.save_every || '1' }}"
           MAX_PART_MB="${{ github.event.inputs.max_part_mb || '0' }}"
           TEXT_LAYOUT="${{ github.event.inputs.text_layout || 'merged' }}"
 
-          CMD="node wattpad.js --batch urls_run.txt --format \"$FORMAT\" --output ./output --state ./state.json --throttle-ms \"$THROTTLE_MS\" --save-every \"$SAVE_EVERY\""
-
+          ARGS=(node wattpad.js --batch urls_run.txt --format "$FORMAT" --output ./output --state ./state.json --throttle-ms "$THROTTLE_MS" --save-every "$SAVE_EVERY")
           if [ -n "$CHAPTERS_MAP" ]; then
-            CMD="$CMD --chapters-map '$CHAPTERS_MAP'"
+            printf '%s' "$CHAPTERS_MAP" > chapters_map_run.json
+            ARGS+=(--chapters-map-file chapters_map_run.json)
           fi
-
           if [ "$TEXT_LAYOUT" = "per_chapter" ]; then
-            CMD="$CMD --text-layout per-chapter"
+            ARGS+=(--text-layout per-chapter)
           fi
-
           if [ -n "$MAX_PART_MB" ] && [ "$MAX_PART_MB" != "0" ] && [ "$MAX_PART_MB" != "0.0" ]; then
-            CMD="$CMD --max-part-mb \"$MAX_PART_MB\""
+            ARGS+=(--max-part-mb "$MAX_PART_MB")
           fi
-
-          eval $CMD
+          "${ARGS[@]}"
         continue-on-error: true
 
       - name: Save download state
