@@ -1,4 +1,4 @@
-name: BNS Downloader v1.6
+name: BNS Downloader v2.0
 
 on:
   workflow_dispatch:
