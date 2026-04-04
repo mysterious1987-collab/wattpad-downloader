@@ -1,0 +1,24 @@
+=== File cần thiết cho repo lõi v2.0 (kế thừa v1.9) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v2.0 (log chapters_map; logic tải như v1.9)
+  bns.js
+  .github/workflows/download.yml
+  .github/workflows/bns-download.yml
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/
+  index.html          ← v2.0: chapters_map từ DOM + re-render theo S.stories
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.0]
+  index.html: buildChaptersMap() đọc .chapter-item.selected trên DOM; renderStoryBlock() khôi phục checkbox từ S.stories.selectedChapters.

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v1.9
+ * Wattpad Batch Downloader — GitHub Actions edition v2.0
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
  * - Resume nhờ state.json cache + thư mục song song *-bodies (tránh JSON.stringify toàn truyện → Invalid string length).
  * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
- * - v1.9: sau chapter lấy từ cache không chờ throttle; TXT/MD/JSON — gộp file (max_part_mb như cũ) hoặc mỗi chương một file.
- * - save_every mặc định 1: ghi state sau mỗi chapter tải mạng; --save-every N để gộp N chapter giảm IO.
+ * - v1.9 / v2.0: sau chapter lấy từ cache không chờ throttle; TXT/MD/JSON — gộp hoặc per-chapter; save_every mặc định 1.
+ * - v2.0: UI index.html gửi chapters_map khớp DOM (fix chọn subset chapter).
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -582,7 +582,11 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
     ? parts.filter((_, i) => opts.chapterSelection.has(i + 1))
     : parts;
 
-  logLine(`   📑 ${selectedParts.length}/${parts.length} chapters được chọn`);
+  logLine(
+    opts.chapterSelection
+      ? `   📑 ${selectedParts.length}/${parts.length} chapters (theo chapters_map / UI)`
+      : `   📑 ${selectedParts.length}/${parts.length} chapters được chọn`,
+  );
 
   const doneCount = selectedParts.filter(p => {
     const c = storyState.chapters[p.url];
@@ -681,7 +685,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v1.9
+Wattpad Downloader v2.0
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -747,7 +751,7 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v1.9`);
+  console.log(`Wattpad Downloader v2.0`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
