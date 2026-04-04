@@ -101,6 +101,38 @@ jobs:
           restore-keys: |
             wattpad-state-
 
+      - name: State cache diagnostics (sau Restore)
+        run: |
+          echo "=== State cache diagnostics (A: kiểm tra cache Actions có về runner không) ==="
+          echo "Lưu ý: key đầy đủ là wattpad-state-<sha256 urls_run.txt>; restore-keys có thể khôi phục entry cũ hơn (prefix wattpad-state-)."
+          echo ""
+          echo "--- urls_run.txt (ảnh hưởng cache key) ---"
+          if [ -f urls_run.txt ]; then
+            echo "Kích thước: $(wc -c < urls_run.txt) bytes"
+            echo "sha256: $(sha256sum urls_run.txt | cut -d' ' -f1)"
+          else
+            echo "Không tìm thấy urls_run.txt"
+          fi
+          echo ""
+          echo "--- state.json ---"
+          if [ -f state.json ]; then
+            echo "Có file. Kích thước: $(wc -c < state.json) bytes"
+            DONE_N=$(grep -oE '"status"[[:space:]]*:[[:space:]]*"done"' state.json 2>/dev/null | wc -l | tr -d ' ')
+            echo "Số lần xuất hiện status \"done\" trong JSON (ước lượng chapter đã cache): ${DONE_N:-0}"
+          else
+            echo "KHÔNG CÓ — Actions cache miss hoặc chưa từng Save state thành công với key khớp."
+          fi
+          echo ""
+          echo "--- state-bodies/ ---"
+          if [ -d state-bodies ]; then
+            F=$(find state-bodies -type f 2>/dev/null | wc -l | tr -d ' ')
+            echo "Thư mục có $F file nội dung chương."
+            du -sh state-bodies 2>/dev/null || true
+          else
+            echo "KHÔNG CÓ thư mục — nếu state.json có bodyRef, script sẽ không coi chapter là đã cache đủ."
+          fi
+          echo "=== Hết diagnostics ==="
+
       - name: Download stories
         run: |
           FORMAT="${{ github.event.inputs.format || 'epub' }}"
