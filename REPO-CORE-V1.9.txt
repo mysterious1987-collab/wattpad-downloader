@@ -1,0 +1,29 @@
+=== File cần thiết cho repo lõi v1.9 (đối chiếu Object Github/v1.8) ===
+
+[Kế thừa v1.8 — bắt buộc]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v1.9: throttle chỉ sau tải mạng; --text-layout merged|per-chapter (TXT/MD/JSON)
+  bns.js
+  .github/workflows/download.yml
+  .github/workflows/bns-download.yml
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu]
+  docs/GUIDE.md
+  docs/HISTORY.md
+  docs/PLAN.md
+
+[Giao diện kích hoạt Actions]
+  index.html          (v1.9: text_layout + các tuỳ chọn v1.8)
+
+[Sau khi clone / copy thư mục này]
+  npm install
+
+[Ghi chú v1.9]
+  Cache: đọc state + state-bodies trước; chapter đã done bỏ qua mạng và không chờ throttle trước chapter kế.
+  TXT/MD/JSON: merged giữ --max-part-mb; per-chapter → thư mục *_txt_chapters / *_md_chapters / *_json_chapters.

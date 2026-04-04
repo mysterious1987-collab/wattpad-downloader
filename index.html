@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Ebook Downloader v1.8 · Wattpad + BNS</title>
+<title>Ebook Downloader v1.9 · Wattpad + BNS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -231,7 +231,7 @@ textarea{min-height:90px;line-height:1.7}
         <p>Wattpad + Bạch Ngọc Sách · GitHub Actions</p>
       </div>
     </div>
-    <span class="version-badge">v1.8</span>
+    <span class="version-badge">v1.9</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -253,7 +253,7 @@ textarea{min-height:90px;line-height:1.7}
           <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> &nbsp;·&nbsp; <code>Contents → Read</code></div>
           <div class="guide-step">Copy token → paste vào ô bên dưới</div>
           <div class="guide-step"><b style="color:var(--text)">BNS (Bạch Ngọc Sách)</b>: tạo Secrets <code>BNS_USERNAME</code> và <code>BNS_PASSWORD</code> trong repo (Settings → Secrets → Actions)</div>
-          <div class="guide-step"><b style="color:var(--text)">Wattpad v1.8</b>: Actions cache <code>state.json</code> + thư mục <code>state-bodies</code> để resume. Truyện rất dài (TXT/MD/JSON) có thể đặt <code>max_part_mb</code> (vd. 15–20) nếu lỗi «Invalid string length».</div>
+          <div class="guide-step"><b style="color:var(--text)">Wattpad v1.9</b>: Cache <code>state.json</code> + <code>state-bodies</code> — chapter đã có thì bỏ qua mạng và không chờ delay giữa các chapter cache. TXT/MD/JSON: <b>gộp file</b> (có <code>max_part_mb</code>) hoặc <b>mỗi chương một file</b> (<code>text_layout</code>).</div>
         </div>
       </div>
       <div class="field-row">
@@ -306,7 +306,14 @@ textarea{min-height:90px;line-height:1.7}
     <div class="field">
       <label>max_part_mb <span style="color:var(--muted)">(TXT/MD/JSON — tối đa MB mỗi file phần; 0 = một file)</span></label>
       <input type="text" id="inWpMaxPartMb" placeholder="0 hoặc 20" value="0" oninput="updateTriggerBtn()"/>
-      <div class="hint">Để <code>0</code> nếu không cần chia file. Chỉ áp dụng khi &gt; 0 (khớp workflow <code>download.yml</code> v1.8).</div>
+      <div class="hint">Chế độ <b>gộp</b>: để <code>0</code> hoặc đặt MB mỗi phần. Chế độ <b>mỗi chương một file</b> bỏ qua giới hạn này (khớp <code>download.yml</code> v1.9).</div>
+    </div>
+    <div class="field">
+      <label>TXT / MD / JSON — bố cục file</label>
+      <select id="inWpTextLayout" onchange="updateTriggerBtn()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:.8rem;padding:9px 13px">
+        <option value="merged">Gộp (một hoặc vài file lớn — dùng max_part_mb)</option>
+        <option value="per_chapter">Mỗi chương một file (thư mục *_txt_chapters / *_md_chapters / *_json_chapters)</option>
+      </select>
     </div>
     </div>
 
@@ -409,6 +416,8 @@ const S = {
   document.getElementById('inWpThrottle').value = localStorage.getItem('wp_throttle_ms') || '900';
   document.getElementById('inWpSaveEvery').value = localStorage.getItem('wp_save_every') || '5';
   document.getElementById('inWpMaxPartMb').value = localStorage.getItem('wp_max_part_mb') ?? '0';
+  const tl = localStorage.getItem('wp_text_layout');
+  if (tl === 'per_chapter') document.getElementById('inWpTextLayout').value = 'per_chapter';
   updateTriggerBtn();
   if(S.owner&&S.repo&&S.pat){ collapseCard('setupCard'); loadRuns(); startPolling(); }
 })();
@@ -1000,7 +1009,9 @@ async function triggerWorkflow(){
     localStorage.setItem('wp_throttle_ms', document.getElementById('inWpThrottle').value.trim());
     localStorage.setItem('wp_save_every', document.getElementById('inWpSaveEvery').value.trim());
     localStorage.setItem('wp_max_part_mb', document.getElementById('inWpMaxPartMb').value.trim() || '0');
-    const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName, throttle_ms, save_every, max_part_mb };
+    const text_layout = document.getElementById('inWpTextLayout').value;
+    localStorage.setItem('wp_text_layout', text_layout);
+    const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName, throttle_ms, save_every, max_part_mb, text_layout };
     if(chaptersMap) inputs.chapters_map = chaptersMap;
 
     const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`,{

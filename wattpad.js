@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v1.8
+ * Wattpad Batch Downloader — GitHub Actions edition v1.9
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
  * - Resume nhờ state.json cache + thư mục song song *-bodies (tránh JSON.stringify toàn truyện → Invalid string length).
  * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
+ * - v1.9: sau chapter lấy từ cache không chờ throttle; TXT/MD/JSON — gộp file (max_part_mb như cũ) hoặc mỗi chương một file.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
- *   node wattpad.js https://www.wattpad.com/story/123456 --format txt
+ *   node wattpad.js --batch urls.txt --format txt --text-layout per-chapter
  *   node wattpad.js --batch urls.txt --chapters-map '{"123456":"1-5,10","789012":"all"}'
  */
 
@@ -475,6 +476,66 @@ async function writeJsonFile(meta, chapters, basePathNoExt, maxPartBytes) {
   return files;
 }
 
+/** Một file mỗi chương — không áp dụng max_part_mb (chỉ dùng khi --text-layout per-chapter). */
+function chapterFileSlug(ch, index0) {
+  const t = sanitizeFilename(ch.title || "").replace(/^_+|_+$/g, "").slice(0, 72);
+  return t || `chapter_${index0 + 1}`;
+}
+
+async function writePerChapterTxt(meta, chapters, basePathNoExt) {
+  const dir = `${basePathNoExt}_txt_chapters`;
+  await fs.mkdir(dir, { recursive: true });
+  const head = [meta.title, `by ${meta.user?.name || "Unknown"}`, "", "═".repeat(40), ""].join("\n");
+  const files = [];
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    const slug = chapterFileSlug(ch, i);
+    const fn = path.join(dir, `ch${String(i + 1).padStart(3, "0")}_${slug}.txt`);
+    const body = `${ch.title}\n${"─".repeat(40)}\n${ch.paras.map(p => p.text).join("\n\n")}\n`;
+    await fs.writeFile(fn, head + body, "utf8");
+    files.push(fn);
+  }
+  return files;
+}
+
+async function writePerChapterMd(meta, chapters, basePathNoExt) {
+  const dir = `${basePathNoExt}_md_chapters`;
+  await fs.mkdir(dir, { recursive: true });
+  const head = [`# ${meta.title}`, `**Tác giả:** ${meta.user?.name || "Unknown"}`, "", "---", ""].join("\n");
+  const files = [];
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    const slug = chapterFileSlug(ch, i);
+    const fn = path.join(dir, `ch${String(i + 1).padStart(3, "0")}_${slug}.md`);
+    const body = `## ${ch.title}\n\n${ch.paras.map(p => p.text).join("\n\n")}\n`;
+    await fs.writeFile(fn, head + body, "utf8");
+    files.push(fn);
+  }
+  return files;
+}
+
+async function writePerChapterJson(meta, chapters, basePathNoExt) {
+  const dir = `${basePathNoExt}_json_chapters`;
+  await fs.mkdir(dir, { recursive: true });
+  const files = [];
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    const slug = chapterFileSlug(ch, i);
+    const fn = path.join(dir, `ch${String(i + 1).padStart(3, "0")}_${slug}.json`);
+    const obj = {
+      storyId: meta.id,
+      storyTitle: meta.title,
+      author: meta.user?.name,
+      chapterIndex: i + 1,
+      title: ch.title,
+      text: ch.paras.map(p => p.text).join("\n\n"),
+    };
+    await fs.writeFile(fn, JSON.stringify(obj, null, 2), "utf8");
+    files.push(fn);
+  }
+  return files;
+}
+
 async function toEpub(meta, chapters) {
   const bw = new BlobWriter("application/epub+zip");
   const zw = new ZipWriter(bw, { useWebWorkers: false });
@@ -533,32 +594,35 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
   for (let i = 0; i < selectedParts.length; i++) {
     const part = selectedParts[i];
     const cached = storyState.chapters[part.url];
+    let fetchedFromNetwork = false;
     if (cached?.status === "done" && cached?.paras?.length > 0) {
       logStep(`   [${i+1}/${selectedParts.length}] ✓ ${part.title.slice(0,50)} (cache)`);
-      continue;
-    }
-    logLine(`   [${i+1}/${selectedParts.length}] Đang tải: ${part.title.slice(0,50)}...`);
-    try {
-      const ch = await fetchChapter(part);
-      if (ch.paras.length === 0) {
-        storyState.chapters[part.url] = { status: "empty", title: part.title, paras: [{ text: "[Chapter trống hoặc bị khoá]" }] };
-      } else {
-        logLine(`   ✓ ${ch.paras.length} đoạn văn`);
-        storyState.chapters[part.url] = { status: "done", title: ch.title || part.title, paras: ch.paras };
+    } else {
+      fetchedFromNetwork = true;
+      logLine(`   [${i+1}/${selectedParts.length}] Đang tải: ${part.title.slice(0,50)}...`);
+      try {
+        const ch = await fetchChapter(part);
+        if (ch.paras.length === 0) {
+          storyState.chapters[part.url] = { status: "empty", title: part.title, paras: [{ text: "[Chapter trống hoặc bị khoá]" }] };
+        } else {
+          logLine(`   ✓ ${ch.paras.length} đoạn văn`);
+          storyState.chapters[part.url] = { status: "done", title: ch.title || part.title, paras: ch.paras };
+        }
+      } catch (e) {
+        logLine(`   ✗ Lỗi: ${e.message}`);
+        storyState.chapters[part.url] = { status: "error", title: part.title, paras: [{ text: `[Lỗi: ${e.message}]` }] };
       }
-    } catch (e) {
-      logLine(`   ✗ Lỗi: ${e.message}`);
-      storyState.chapters[part.url] = { status: "error", title: part.title, paras: [{ text: `[Lỗi: ${e.message}]` }] };
+
+      // save state theo lô (sau khi tải mới / lỗi mạng)
+      saveCountdown--;
+      if (saveCountdown <= 0) {
+        await saveState(stateFile, state);
+        saveCountdown = opts.saveEvery;
+      }
     }
 
-    // save state theo lô
-    saveCountdown--;
-    if (saveCountdown <= 0) {
-      await saveState(stateFile, state);
-      saveCountdown = opts.saveEvery;
-    }
-
-    if (i < selectedParts.length - 1) await sleep(opts.throttleMs);
+    // Chỉ delay sau khi vừa gọi mạng — bỏ qua khi chỉ đọc cache (resume nhanh hơn)
+    if (fetchedFromNetwork && i < selectedParts.length - 1) await sleep(opts.throttleMs);
   }
 
   // flush state
@@ -582,13 +646,22 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
         results.push({ ok: true, filename });
       } else {
         const maxB = opts.maxPartBytes || 0;
+        const perCh = opts.textLayout === "per-chapter";
         let files;
-        if (fmt === "txt") files = await writeTxtFile(meta, chapters, basePathNoExt, maxB);
-        else if (fmt === "md") files = await writeMarkdownFile(meta, chapters, basePathNoExt, maxB);
-        else files = await writeJsonFile(meta, chapters, basePathNoExt, maxB);
-        for (const fn of files) logLine(`   💾 ${fn}`);
-        if (files.length > 1 && maxB > 0) {
-          logLine(`   📎 ${fmt.toUpperCase()}: ${files.length} file (tối đa ~${opts.maxPartMb} MB UTF-8 mỗi phần)`);
+        if (perCh) {
+          if (fmt === "txt") files = await writePerChapterTxt(meta, chapters, basePathNoExt);
+          else if (fmt === "md") files = await writePerChapterMd(meta, chapters, basePathNoExt);
+          else files = await writePerChapterJson(meta, chapters, basePathNoExt);
+          for (const fn of files) logLine(`   💾 ${fn}`);
+          logLine(`   📂 ${fmt.toUpperCase()}: ${files.length} file (mỗi chương một file; --max-part-mb chỉ áp dụng khi gộp)`);
+        } else {
+          if (fmt === "txt") files = await writeTxtFile(meta, chapters, basePathNoExt, maxB);
+          else if (fmt === "md") files = await writeMarkdownFile(meta, chapters, basePathNoExt, maxB);
+          else files = await writeJsonFile(meta, chapters, basePathNoExt, maxB);
+          for (const fn of files) logLine(`   💾 ${fn}`);
+          if (files.length > 1 && maxB > 0) {
+            logLine(`   📎 ${fmt.toUpperCase()}: ${files.length} file (tối đa ~${opts.maxPartMb} MB UTF-8 mỗi phần)`);
+          }
         }
         for (const fn of files) results.push({ ok: true, filename: fn });
       }
@@ -607,7 +680,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v1.8
+Wattpad Downloader v1.9
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -618,9 +691,10 @@ Options:
   --state  <file>               (mặc định: ./state.json)
   --batch  <urls.txt>
   --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}'
-  --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS})
+  --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS}; chỉ sau request mạng)
   --save-every <n>              Save state mỗi n chapters tải mới (mặc định: ${DEFAULT_SAVE_EVERY})
-  --max-part-mb <số>            TXT/MD/JSON: tối đa MB mỗi phần (UTF-8). 0 = một file (mặc định). Vd: 20
+  --max-part-mb <số>            TXT/MD/JSON (chế độ gộp): tối đa MB mỗi phần. 0 = một file. Vd: 20
+  --text-layout merged|per-chapter   TXT/MD/JSON: gộp file (mặc định) hoặc mỗi chương một file (bỏ qua max_part khi per-chapter)
 `);
     process.exit(0);
   }
@@ -630,6 +704,7 @@ Options:
   let throttleMs = DEFAULT_THROTTLE_MS;
   let saveEvery = DEFAULT_SAVE_EVERY;
   let maxPartMb = 0;
+  let textLayout = "merged";
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -639,6 +714,11 @@ Options:
     else if (a === "--batch"        && args[i+1]) batchFile = args[++i];
     else if (a === "--throttle-ms"  && args[i+1]) throttleMs = Math.max(0, parseInt(args[++i] || String(DEFAULT_THROTTLE_MS), 10));
     else if (a === "--save-every"   && args[i+1]) saveEvery  = Math.max(1, parseInt(args[++i] || String(DEFAULT_SAVE_EVERY), 10));
+    else if (a === "--text-layout"  && args[i+1]) {
+      const v = String(args[++i]).trim().toLowerCase().replace(/_/g, "-");
+      if (v === "per-chapter" || v === "perchapter") textLayout = "per-chapter";
+      else textLayout = "merged";
+    }
     else if (a === "--max-part-mb"  && args[i+1]) {
       const v = parseFloat(String(args[++i]).replace(",", "."));
       maxPartMb = Number.isFinite(v) && v > 0 ? v : 0;
@@ -666,12 +746,16 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v1.8`);
+  console.log(`Wattpad Downloader v1.9`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
-  console.log(`Speed  : throttle=${throttleMs}ms | saveEvery=${saveEvery}`);
-  if (maxPartMb > 0) console.log(`Parts  : TXT/MD/JSON tối đa ~${maxPartMb} MB/phần (UTF-8)`);
+  console.log(`Speed  : throttle=${throttleMs}ms (sau tải mạng) | saveEvery=${saveEvery}`);
+  if (formats.some(f => ["txt", "md", "json"].includes(f))) {
+    console.log(`Layout : ${textLayout === "per-chapter" ? "per-chapter (mỗi chương một file)" : "merged (gộp)"}`);
+  }
+  if (maxPartMb > 0 && textLayout !== "per-chapter") console.log(`Parts  : TXT/MD/JSON gộp — tối đa ~${maxPartMb} MB/phần (UTF-8)`);
+  if (maxPartMb > 0 && textLayout === "per-chapter") console.log(`Parts  : max_part_mb bỏ qua khi per-chapter (mỗi file = một chương)`);
   console.log(`${"═".repeat(60)}`);
 
   const summary = { ok: [], fail: [] };
@@ -687,7 +771,7 @@ Options:
         outputDir,
         state,
         stateFile,
-        { chapterSelection: selection, throttleMs, saveEvery, maxPartBytes, maxPartMb },
+        { chapterSelection: selection, throttleMs, saveEvery, maxPartBytes, maxPartMb, textLayout },
       );
       summary.ok.push({ url, files: results.filter(r=>r.ok).map(r=>r.filename) });
     } catch (e) {

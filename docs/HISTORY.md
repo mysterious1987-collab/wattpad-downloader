@@ -1,5 +1,16 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v1.9 (2026-04-03)
+
+- **Resume nhanh hơn**: `throttle_ms` chỉ áp dụng **sau** khi vừa tải chapter qua mạng; chuỗi chapter chỉ đọc cache không chờ delay giữa các chapter.
+- **TXT / MD / JSON**: `--text-layout merged` (mặc định, giữ `--max-part-mb` chia phần như v1.8) hoặc `per-chapter` — mỗi chương một file trong thư mục `*_txt_chapters`, `*_md_chapters`, `*_json_chapters`.
+- Workflow `download.yml` + `index.html`: input / UI `text_layout` (`merged` | `per_chapter`).
+- Gói **`Object Github/v1.9`**: snapshot repo đầy đủ.
+
+### v1.8
+
+- Cache `state.json` + `state-bodies`; `--max-part-mb` cho file gộp; UI Wattpad: throttle, save_every, max_part_mb.
+
 ### v1.6 (2026-04-03)
 
 - **BNS**: tải chương có `#encrypted-content` — gọi `POST /reader/api/decrypt-content.php` (cùng cookie đăng nhập) rồi parse HTML đã giải mã

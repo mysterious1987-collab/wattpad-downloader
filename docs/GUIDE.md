@@ -1,4 +1,4 @@
-## Wattpad Downloader — GitHub Actions (v1.6)
+## Wattpad Downloader — GitHub Actions (v1.9)
 
 Mục tiêu: chạy tải **trên GitHub Actions**, rồi bạn tải file về máy qua **artifact**, để máy bạn “offline” khỏi việc crawl Wattpad.
 
@@ -13,11 +13,12 @@ Mục tiêu: chạy tải **trên GitHub Actions**, rồi bạn tải file về 
 ### Step-by-step: chạy trên GitHub Actions
 
 1) Vào repo GitHub → tab **Actions**
-2) Chọn workflow **Wattpad Downloader v1.6**
+2) Chọn workflow **Wattpad Downloader v1.9**
 3) Bấm **Run workflow**
    - **format**: `epub` / `txt` / `md` / `json` hoặc combo
    - **urls**: dán URL (mỗi dòng 1). Nếu để trống thì workflow dùng `urls.txt`
-   - **throttle_ms**: mặc định `900` (giảm = nhanh hơn nhưng dễ 429)
+   - **text_layout**: `merged` (mặc định) hoặc `per_chapter` — chỉ ảnh hưởng txt/md/json; gộp thì dùng **max_part_mb** như v1.8
+   - **throttle_ms**: mặc định `900` (áp dụng sau khi tải chapter qua mạng, không chờ giữa các chapter chỉ đọc cache)
    - **save_every**: mặc định `5` (tăng = nhanh hơn do giảm IO, nhưng rủi ro mất tối đa N chapters nếu job chết)
 4) Chờ run xong → tải artifact trong trang run
 
@@ -33,12 +34,13 @@ Mục tiêu: chạy tải **trên GitHub Actions**, rồi bạn tải file về 
    - **chapter_from** / **chapter_to** (tuỳ chọn): giới hạn khoảng chương theo số thứ tự mục lục (1-based); để trống = tải cả truyện
 4) Chờ run xong → tải artifact
 
-**Giao diện `index.html` (v1.6)**: tab BNS có ô **Từ chương / Đến chương** tương ứng các input trên.
+**Giao diện `index.html` (v1.9)**: tab Wattpad có **bố cục TXT/MD/JSON**; tab BNS có **Từ chương / Đến chương** tương ứng các input trên.
 
 ### Step-by-step: chạy local (debug)
 
 ```bash
 npm install
 node wattpad.js --batch urls.txt --format epub --output ./output --state ./state.json
+node wattpad.js --batch urls.txt --format txt --text-layout per-chapter --output ./output
 ```
 
