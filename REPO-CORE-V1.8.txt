@@ -1,0 +1,30 @@
+=== File cần thiết cho repo lõi v1.8 (đối chiếu Object Github/v1.6) ===
+
+[Kế thừa từ v1.6 — vẫn bắt buộc]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← CLI Wattpad + logic Actions (v1.8: state-bodies, --max-part-mb)
+  bns.js              ← CLI BNS (GitHub Actions)
+  .github/workflows/download.yml
+  .github/workflows/bns-download.yml
+
+[Thêm so với v1.6 — BNS cookie/bridge khớp package.json]
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu — có trong v1.6, giữ trong v1.8]
+  docs/GUIDE.md
+  docs/HISTORY.md
+  docs/PLAN.md
+
+[Giao diện kích hoạt Actions — nâng cấp từ v1.6]
+  index.html          (PAT + Wattpad/BNS + chapters_map; v1.8: throttle_ms, save_every, max_part_mb cho Wattpad, khớp download.yml)
+
+[Sau khi clone / copy thư mục này]
+  npm install
+
+[Ghi chú Actions Wattpad v1.8]
+  Cache gồm state.json + state-bodies (xem download.yml).

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v1.6
+ * Wattpad Batch Downloader — GitHub Actions edition v1.8
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
- * - Resume nhờ state.json cache.
+ * - Resume nhờ state.json cache + thư mục song song *-bodies (tránh JSON.stringify toàn truyện → Invalid string length).
  * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
  *
  * Cách dùng:
@@ -19,6 +19,7 @@ import fetch from "node-fetch";
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import crypto from "crypto";
 import { ZipWriter, BlobWriter, TextReader } from "@zip.js/zip.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -39,6 +40,9 @@ const RETRY_DELAYS = [1500, 3500, 8000, 15000];
 // Save state theo lô để giảm IO (đặc biệt trong Actions)
 const DEFAULT_SAVE_EVERY = 5;
 
+/** Khi --max-part-mb > 0: mỗi file txt/md/json không vượt quá ~N MB (UTF-8). Tối thiểu 512 KiB nếu giá trị quá nhỏ. */
+const MIN_SPLIT_PART_BYTES = 512 * 1024;
+
 // ══════════════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════════════
@@ -58,6 +62,52 @@ function escXml(s) {
 
 function logLine(...args) { console.log(...args); }
 function logStep(msg)     { process.stdout.write(`  ${msg}\r`); }
+
+function sha16(s) {
+  return crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 16);
+}
+
+/** Thư mục lưu nội dung từng chương (JSON array paras) — cạnh state.json */
+function bodiesRoot(stateFile) {
+  const base = path.basename(stateFile, path.extname(stateFile)) || "state";
+  return path.join(path.dirname(stateFile), `${base}-bodies`);
+}
+
+function chapterBodyFilename(storyId, partUrl) {
+  return `${String(storyId)}_${sha16(partUrl)}.json`;
+}
+
+/**
+ * Gom chapters thành các nhóm; tổng (header phần + nội dung chương) ước lượng ≤ maxPartBytes.
+ * Một chương vượt ngưỡng vẫn nằm một phần riêng (cảnh báo có thể bổ sung ở caller).
+ */
+function partitionChaptersByWeight(chapters, maxPartBytes, headBytesFn, chapterWeightFn) {
+  if (!chapters.length) return [[]];
+  const out = [];
+  let i = 0;
+  while (i < chapters.length) {
+    const partNum = out.length + 1;
+    const isFirst = out.length === 0;
+    const headCost = headBytesFn(partNum, isFirst);
+    let used = headCost;
+    const start = i;
+    while (i < chapters.length) {
+      const w = chapterWeightFn(chapters[i]);
+      if (used + w <= maxPartBytes) {
+        used += w;
+        i++;
+        continue;
+      }
+      if (used === headCost) {
+        used += w;
+        i++;
+      }
+      break;
+    }
+    out.push(chapters.slice(start, i));
+  }
+  return out;
+}
 
 /**
  * Parse chuỗi chapter selection: "1-5,10,12-15" → Set {1,2,3,4,5,10,12,13,14,15}
@@ -233,34 +283,196 @@ async function fetchChapter(part) {
 async function loadState(stateFile) {
   try {
     if (!existsSync(stateFile)) return {};
-    return JSON.parse(await fs.readFile(stateFile, "utf8"));
-  } catch { return {}; }
+    const data = JSON.parse(await fs.readFile(stateFile, "utf8"));
+    const root = bodiesRoot(stateFile);
+    for (const ss of Object.values(data)) {
+      if (!ss || typeof ss !== "object" || !ss.chapters) continue;
+      for (const ch of Object.values(ss.chapters)) {
+        if (!ch || ch.paras?.length) continue;
+        if (ch.bodyRef) {
+          const bf = path.join(root, ch.bodyRef);
+          if (existsSync(bf)) {
+            try {
+              ch.paras = JSON.parse(await fs.readFile(bf, "utf8"));
+            } catch {
+              ch.paras = [{ text: "[Lỗi đọc file cache chương]" }];
+            }
+          }
+        }
+      }
+    }
+    return data;
+  } catch {
+    return {};
+  }
 }
+
 async function saveState(stateFile, state) {
-  await fs.writeFile(stateFile, JSON.stringify(state, null, 2), "utf8");
+  const root = bodiesRoot(stateFile);
+  await fs.mkdir(root, { recursive: true });
+  const forDisk = {};
+  for (const [storyId, ss] of Object.entries(state)) {
+    if (!ss || typeof ss !== "object") {
+      forDisk[storyId] = ss;
+      continue;
+    }
+    forDisk[storyId] = { meta: ss.meta, chapters: {} };
+    for (const [url, ch] of Object.entries(ss.chapters || {})) {
+      if (!ch) continue;
+      const row = { status: ch.status, title: ch.title };
+      if (Array.isArray(ch.paras) && ch.paras.length) {
+        const fn = chapterBodyFilename(storyId, url);
+        await fs.writeFile(path.join(root, fn), JSON.stringify(ch.paras), "utf8");
+        row.bodyRef = fn;
+      } else if (ch.bodyRef) {
+        row.bodyRef = ch.bodyRef;
+      }
+      forDisk[storyId].chapters[url] = row;
+    }
+  }
+  await fs.writeFile(stateFile, JSON.stringify(forDisk, null, 2), "utf8");
 }
 
 // ══════════════════════════════════════════════════════════════
-// OUTPUT BUILDERS
+// OUTPUT BUILDERS (ghi theo chương hoặc theo part giới hạn MB — tránh chuỗi quá lớn)
 // ══════════════════════════════════════════════════════════════
-function toTxt(meta, chapters) {
-  return [meta.title, `by ${meta.user?.name||"Unknown"}`, "", meta.description||"", "", "═".repeat(60), "",
-    ...chapters.flatMap(ch => [ch.title, "─".repeat(40), ch.paras.map(p=>p.text).join("\n\n"), ""])
-  ].join("\n");
+function partFilePath(basePathNoExt, ext, partIndex1, totalParts) {
+  if (totalParts <= 1) return `${basePathNoExt}.${ext}`;
+  return `${basePathNoExt}_part${String(partIndex1).padStart(2, "0")}.${ext}`;
 }
 
-function toMarkdown(meta, chapters) {
-  return [`# ${meta.title}`, `**Tác giả:** ${meta.user?.name||"Unknown"}`, "",
-    meta.description ? `> ${meta.description.replace(/\n/g,"\n> ")}` : "", "",
-    ...chapters.flatMap(ch => [`## ${ch.title}`, "", ch.paras.map(p=>p.text).join("\n\n"), ""])
-  ].join("\n");
+async function writeTxtFile(meta, chapters, basePathNoExt, maxPartBytes) {
+  const fullHead = [meta.title, `by ${meta.user?.name || "Unknown"}`, "", meta.description || "", "", "═".repeat(60), ""].join("\n");
+  const block = (ch) => `${ch.title}\n${"─".repeat(40)}\n${ch.paras.map(p => p.text).join("\n\n")}\n\n`;
+  const shortHead = (pn) => `— ${meta.title} — (phần ${pn})\n\n`;
+
+  if (!maxPartBytes || maxPartBytes <= 0) {
+    const f = `${basePathNoExt}.txt`;
+    await fs.writeFile(f, fullHead, "utf8");
+    for (const ch of chapters) await fs.appendFile(f, block(ch), "utf8");
+    return [f];
+  }
+
+  const effMax = Math.max(maxPartBytes, MIN_SPLIT_PART_BYTES);
+  const groups = partitionChaptersByWeight(
+    chapters,
+    effMax,
+    (pn, isFirst) => Buffer.byteLength(isFirst ? fullHead : shortHead(pn), "utf8"),
+    (ch) => Buffer.byteLength(block(ch), "utf8"),
+  );
+  const total = groups.length;
+  const files = [];
+  for (let g = 0; g < total; g++) {
+    const head = g === 0 ? fullHead : shortHead(g + 1);
+    let content = head;
+    for (const ch of groups[g]) content += block(ch);
+    const fp = partFilePath(basePathNoExt, "txt", g + 1, total);
+    await fs.writeFile(fp, content, "utf8");
+    files.push(fp);
+    if (Buffer.byteLength(content, "utf8") > effMax) {
+      logLine(`   ⚠ Phần ${g + 1} TXT ~${Math.round(Buffer.byteLength(content, "utf8") / 1024 / 1024)} MB (> giới hạn — thường do một chương rất dài)`);
+    }
+  }
+  return files;
 }
 
-function toJsonOutput(meta, chapters) {
-  return JSON.stringify({ title: meta.title, author: meta.user?.name, description: meta.description,
-    cover: meta.cover, tags: meta.tags, completed: meta.completed,
-    chapters: chapters.map(ch => ({ title: ch.title, text: ch.paras.map(p=>p.text).join("\n\n") }))
-  }, null, 2);
+async function writeMarkdownFile(meta, chapters, basePathNoExt, maxPartBytes) {
+  const fullHead = [`# ${meta.title}`, `**Tác giả:** ${meta.user?.name || "Unknown"}`, "",
+    meta.description ? `> ${meta.description.replace(/\n/g, "\n> ")}` : "", "", ""].join("\n");
+  const block = (ch) => `## ${ch.title}\n\n${ch.paras.map(p => p.text).join("\n\n")}\n\n`;
+  const shortHead = (pn) => `## ${meta.title} _(phần ${pn})_\n\n`;
+
+  if (!maxPartBytes || maxPartBytes <= 0) {
+    const f = `${basePathNoExt}.md`;
+    await fs.writeFile(f, fullHead, "utf8");
+    for (const ch of chapters) await fs.appendFile(f, block(ch), "utf8");
+    return [f];
+  }
+
+  const effMax = Math.max(maxPartBytes, MIN_SPLIT_PART_BYTES);
+  const groups = partitionChaptersByWeight(
+    chapters,
+    effMax,
+    (pn, isFirst) => Buffer.byteLength(isFirst ? fullHead : shortHead(pn), "utf8"),
+    (ch) => Buffer.byteLength(block(ch), "utf8"),
+  );
+  const total = groups.length;
+  const files = [];
+  for (let g = 0; g < total; g++) {
+    const head = g === 0 ? fullHead : shortHead(g + 1);
+    let content = head;
+    for (const ch of groups[g]) content += block(ch);
+    const fp = partFilePath(basePathNoExt, "md", g + 1, total);
+    await fs.writeFile(fp, content, "utf8");
+    files.push(fp);
+    if (Buffer.byteLength(content, "utf8") > effMax) {
+      logLine(`   ⚠ Phần ${g + 1} MD ~${Math.round(Buffer.byteLength(content, "utf8") / 1024 / 1024)} MB (> giới hạn)`);
+    }
+  }
+  return files;
+}
+
+async function writeJsonFile(meta, chapters, basePathNoExt, maxPartBytes) {
+  const jsonChapterObj = (ch) => ({ title: ch.title, text: ch.paras.map(p => p.text).join("\n\n") });
+  const shellBytes = (partNum) =>
+    Buffer.byteLength(
+      JSON.stringify({
+        title: meta.title,
+        author: meta.user?.name,
+        description: meta.description,
+        cover: meta.cover,
+        tags: meta.tags,
+        completed: meta.completed,
+        part: partNum,
+        partsTotal: 999,
+        chapters: [],
+      }),
+      "utf8",
+    );
+
+  if (!maxPartBytes || maxPartBytes <= 0) {
+    const f = `${basePathNoExt}.json`;
+    const open =
+      `{"title":${JSON.stringify(meta.title)},"author":${JSON.stringify(meta.user?.name)},"description":${JSON.stringify(meta.description)},"cover":${JSON.stringify(meta.cover)},"tags":${JSON.stringify(meta.tags)},"completed":${JSON.stringify(meta.completed)},"chapters":[`;
+    await fs.writeFile(f, open, "utf8");
+    for (let i = 0; i < chapters.length; i++) {
+      const obj = jsonChapterObj(chapters[i]);
+      await fs.appendFile(f, (i ? "," : "") + JSON.stringify(obj), "utf8");
+    }
+    await fs.appendFile(f, "]}\n", "utf8");
+    return [f];
+  }
+
+  const effMax = Math.max(maxPartBytes, MIN_SPLIT_PART_BYTES);
+  const groups = partitionChaptersByWeight(
+    chapters,
+    effMax,
+    (pn) => shellBytes(pn),
+    (ch) => Buffer.byteLength(JSON.stringify(jsonChapterObj(ch)), "utf8") + 2,
+  );
+  const total = groups.length;
+  const files = [];
+  for (let g = 0; g < total; g++) {
+    const body = {
+      title: meta.title,
+      author: meta.user?.name,
+      description: meta.description,
+      cover: meta.cover,
+      tags: meta.tags,
+      completed: meta.completed,
+      part: g + 1,
+      partsTotal: total,
+      chapters: groups[g].map(jsonChapterObj),
+    };
+    const jsonStr = JSON.stringify(body, null, 2);
+    const fp = partFilePath(basePathNoExt, "json", g + 1, total);
+    await fs.writeFile(fp, jsonStr, "utf8");
+    files.push(fp);
+    if (Buffer.byteLength(jsonStr, "utf8") > effMax) {
+      logLine(`   ⚠ Phần ${g + 1} JSON ~${Math.round(Buffer.byteLength(jsonStr, "utf8") / 1024 / 1024)} MB (> giới hạn)`);
+    }
+  }
+  return files;
 }
 
 async function toEpub(meta, chapters) {
@@ -358,18 +570,28 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
   });
 
   const safe = sanitizeFilename(meta.title);
+  const basePathNoExt = path.join(outputDir, safe);
   const results = [];
   for (const fmt of formats) {
     logLine(`   Đang xuất ${fmt.toUpperCase()}...`);
-    const filename = path.join(outputDir, `${safe}.${fmt}`);
     try {
-      if (fmt === "epub") await fs.writeFile(filename, await toEpub(meta, chapters));
-      else {
-        const text = fmt === "txt" ? toTxt(meta, chapters) : fmt === "md" ? toMarkdown(meta, chapters) : toJsonOutput(meta, chapters);
-        await fs.writeFile(filename, text, "utf8");
+      if (fmt === "epub") {
+        const filename = `${basePathNoExt}.epub`;
+        await fs.writeFile(filename, await toEpub(meta, chapters));
+        logLine(`   💾 ${filename}`);
+        results.push({ ok: true, filename });
+      } else {
+        const maxB = opts.maxPartBytes || 0;
+        let files;
+        if (fmt === "txt") files = await writeTxtFile(meta, chapters, basePathNoExt, maxB);
+        else if (fmt === "md") files = await writeMarkdownFile(meta, chapters, basePathNoExt, maxB);
+        else files = await writeJsonFile(meta, chapters, basePathNoExt, maxB);
+        for (const fn of files) logLine(`   💾 ${fn}`);
+        if (files.length > 1 && maxB > 0) {
+          logLine(`   📎 ${fmt.toUpperCase()}: ${files.length} file (tối đa ~${opts.maxPartMb} MB UTF-8 mỗi phần)`);
+        }
+        for (const fn of files) results.push({ ok: true, filename: fn });
       }
-      logLine(`   💾 ${filename}`);
-      results.push({ ok: true, filename });
     } catch (e) {
       logLine(`   ✗ Xuất ${fmt} thất bại: ${e.message}`);
       results.push({ ok: false, fmt, error: e.message });
@@ -385,7 +607,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v1.6
+Wattpad Downloader v1.8
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -398,6 +620,7 @@ Options:
   --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}'
   --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS})
   --save-every <n>              Save state mỗi n chapters tải mới (mặc định: ${DEFAULT_SAVE_EVERY})
+  --max-part-mb <số>            TXT/MD/JSON: tối đa MB mỗi phần (UTF-8). 0 = một file (mặc định). Vd: 20
 `);
     process.exit(0);
   }
@@ -406,6 +629,7 @@ Options:
   let batchFile = null, urls = [], chaptersMap = {};
   let throttleMs = DEFAULT_THROTTLE_MS;
   let saveEvery = DEFAULT_SAVE_EVERY;
+  let maxPartMb = 0;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -415,6 +639,10 @@ Options:
     else if (a === "--batch"        && args[i+1]) batchFile = args[++i];
     else if (a === "--throttle-ms"  && args[i+1]) throttleMs = Math.max(0, parseInt(args[++i] || String(DEFAULT_THROTTLE_MS), 10));
     else if (a === "--save-every"   && args[i+1]) saveEvery  = Math.max(1, parseInt(args[++i] || String(DEFAULT_SAVE_EVERY), 10));
+    else if (a === "--max-part-mb"  && args[i+1]) {
+      const v = parseFloat(String(args[++i]).replace(",", "."));
+      maxPartMb = Number.isFinite(v) && v > 0 ? v : 0;
+    }
     else if (a === "--chapters-map" && args[i+1]) {
       try {
         const raw = JSON.parse(args[++i]);
@@ -424,6 +652,8 @@ Options:
   }
 
   if (!formats.length) { console.error("❌ Format không hợp lệ"); process.exit(1); }
+
+  const maxPartBytes = maxPartMb > 0 ? Math.floor(maxPartMb * 1024 * 1024) : 0;
 
   if (batchFile) {
     const content = await fs.readFile(batchFile, "utf8");
@@ -436,11 +666,12 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v1.6`);
+  console.log(`Wattpad Downloader v1.8`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
   console.log(`Speed  : throttle=${throttleMs}ms | saveEvery=${saveEvery}`);
+  if (maxPartMb > 0) console.log(`Parts  : TXT/MD/JSON tối đa ~${maxPartMb} MB/phần (UTF-8)`);
   console.log(`${"═".repeat(60)}`);
 
   const summary = { ok: [], fail: [] };
@@ -456,7 +687,7 @@ Options:
         outputDir,
         state,
         stateFile,
-        { chapterSelection: selection, throttleMs, saveEvery }
+        { chapterSelection: selection, throttleMs, saveEvery, maxPartBytes, maxPartMb },
       );
       summary.ok.push({ url, files: results.filter(r=>r.ok).map(r=>r.filename) });
     } catch (e) {
