@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Ebook Downloader · Wattpad + BNS</title>
+<title>Ebook Downloader v1.8 · Wattpad + BNS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -231,7 +231,7 @@ textarea{min-height:90px;line-height:1.7}
         <p>Wattpad + Bạch Ngọc Sách · GitHub Actions</p>
       </div>
     </div>
-    <span class="version-badge">v1.6</span>
+    <span class="version-badge">v1.8</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -253,6 +253,7 @@ textarea{min-height:90px;line-height:1.7}
           <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> &nbsp;·&nbsp; <code>Contents → Read</code></div>
           <div class="guide-step">Copy token → paste vào ô bên dưới</div>
           <div class="guide-step"><b style="color:var(--text)">BNS (Bạch Ngọc Sách)</b>: tạo Secrets <code>BNS_USERNAME</code> và <code>BNS_PASSWORD</code> trong repo (Settings → Secrets → Actions)</div>
+          <div class="guide-step"><b style="color:var(--text)">Wattpad v1.8</b>: Actions cache <code>state.json</code> + thư mục <code>state-bodies</code> để resume. Truyện rất dài (TXT/MD/JSON) có thể đặt <code>max_part_mb</code> (vd. 15–20) nếu lỗi «Invalid string length».</div>
         </div>
       </div>
       <div class="field-row">
@@ -292,6 +293,21 @@ textarea{min-height:90px;line-height:1.7}
     </div>
 
     <div id="storiesList" class="stories-list" style="margin-bottom:14px;display:none"></div>
+    <div class="field-row">
+      <div class="field">
+        <label>throttle_ms <span style="color:var(--muted)">(Wattpad — delay giữa chương)</span></label>
+        <input type="text" id="inWpThrottle" value="900" oninput="updateTriggerBtn()"/>
+      </div>
+      <div class="field">
+        <label>save_every <span style="color:var(--muted)">(lưu state mỗi N chương)</span></label>
+        <input type="text" id="inWpSaveEvery" value="5" oninput="updateTriggerBtn()"/>
+      </div>
+    </div>
+    <div class="field">
+      <label>max_part_mb <span style="color:var(--muted)">(TXT/MD/JSON — tối đa MB mỗi file phần; 0 = một file)</span></label>
+      <input type="text" id="inWpMaxPartMb" placeholder="0 hoặc 20" value="0" oninput="updateTriggerBtn()"/>
+      <div class="hint">Để <code>0</code> nếu không cần chia file. Chỉ áp dụng khi &gt; 0 (khớp workflow <code>download.yml</code> v1.8).</div>
+    </div>
     </div>
 
     <!-- BNS -->
@@ -390,6 +406,9 @@ const S = {
   document.getElementById('inPat').value   = S.pat;
   updateSetupStatus();
   setSource(localStorage.getItem('dl_source') === 'bns' ? 'bns' : 'wattpad');
+  document.getElementById('inWpThrottle').value = localStorage.getItem('wp_throttle_ms') || '900';
+  document.getElementById('inWpSaveEvery').value = localStorage.getItem('wp_save_every') || '5';
+  document.getElementById('inWpMaxPartMb').value = localStorage.getItem('wp_max_part_mb') ?? '0';
   updateTriggerBtn();
   if(S.owner&&S.repo&&S.pat){ collapseCard('setupCard'); loadRuns(); startPolling(); }
 })();
@@ -914,7 +933,13 @@ function buildChaptersMap(){
 function updateTriggerBtn(){
   let ready=false;
   if(S.source==='wattpad'){
-    ready = !!(S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0);
+    const wth=document.getElementById('inWpThrottle').value.trim();
+    const wsv=document.getElementById('inWpSaveEvery').value.trim();
+    const wn1=parseInt(wth,10), wn2=parseInt(wsv,10);
+    const wNumsOk = wth!=='' && wsv!=='' && !Number.isNaN(wn1) && !Number.isNaN(wn2) && wn1>=0 && wn2>=1;
+    const wmp=document.getElementById('inWpMaxPartMb').value.trim().replace(',','.');
+    const wmpOk = wmp === '' || (!Number.isNaN(parseFloat(wmp)) && parseFloat(wmp) >= 0);
+    ready = !!(S.owner && S.repo && S.pat && parseUrls().length>0 && S.formats.size>0 && wNumsOk && wmpOk);
   } else {
     const th=document.getElementById('inBnsThrottle').value.trim();
     const sv=document.getElementById('inBnsSaveEvery').value.trim();
@@ -963,7 +988,19 @@ async function triggerWorkflow(){
 
     const urls=parseUrls();
     const chaptersMap = buildChaptersMap();
-    const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName };
+    let wt=parseInt(document.getElementById('inWpThrottle').value.trim(),10);
+    if(Number.isNaN(wt)) wt=900;
+    let ws=parseInt(document.getElementById('inWpSaveEvery').value.trim(),10);
+    if(Number.isNaN(ws)) ws=5;
+    const throttle_ms=String(Math.max(0,wt));
+    const save_every=String(Math.max(1,ws));
+    const mpRaw=document.getElementById('inWpMaxPartMb').value.trim().replace(',','.');
+    const mp=parseFloat(mpRaw);
+    const max_part_mb = (Number.isFinite(mp) && mp > 0) ? String(mp) : '0';
+    localStorage.setItem('wp_throttle_ms', document.getElementById('inWpThrottle').value.trim());
+    localStorage.setItem('wp_save_every', document.getElementById('inWpSaveEvery').value.trim());
+    localStorage.setItem('wp_max_part_mb', document.getElementById('inWpMaxPartMb').value.trim() || '0');
+    const inputs = { format: fmtStr, urls: urls.join('\n'), artifact_name: artName, throttle_ms, save_every, max_part_mb };
     if(chaptersMap) inputs.chapters_map = chaptersMap;
 
     const res = await ghApi(`/repos/${S.owner}/${S.repo}/actions/workflows/download.yml/dispatches`,{
