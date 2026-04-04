@@ -1,5 +1,11 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.0 (2026-04-04)
+
+- **Fix UI → Actions**: `chapters_map` sinh từ **DOM** (đúng checkbox đang hiển thị), không chỉ dựa `S.stories` dễ lệch sau `renderAllBlocks`. Re-render block chương đọc `selectedChapters` từ `S.stories` để giữ UI.
+- Log Wattpad: khi có `chapters_map`, dòng `📑 … chapters (theo chapters_map / UI)`.
+- Gói **`Object Github/v2.0`**: snapshot repo đầy đủ.
+
 ### v1.9 (2026-04-03)
 
 - **Save state sau mỗi chapter tải mạng (mặc định)**: `DEFAULT_SAVE_EVERY = 1` + workflow/UI default `save_every: 1` — tránh mất tiến độ khi job Actions dừng trước lần ghi lô cũ (trước đây mặc định 5). Vẫn có `--save-every N` / input workflow để gộp N chapter giảm IO.
