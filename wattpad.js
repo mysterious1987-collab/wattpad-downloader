@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v2.0
+ * Wattpad Batch Downloader — GitHub Actions edition v2.1
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
@@ -8,11 +8,13 @@
  * - Tốc độ tốt hơn v1.2 bằng cách giảm IO (save state theo lô) + tuỳ chọn delay.
  * - v1.9 / v2.0: sau chapter lấy từ cache không chờ throttle; TXT/MD/JSON — gộp hoặc per-chapter; save_every mặc định 1.
  * - v2.0: UI index.html gửi chapters_map khớp DOM (fix chọn subset chapter).
+ * - v2.1: --chapter-from / --chapter-to (mỗi story trong batch); giao với chapters_map; retry 408/503 khi fetch.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
  *   node wattpad.js --batch urls.txt --format txt --text-layout per-chapter
  *   node wattpad.js --batch urls.txt --chapters-map '{"123456":"1-5,10","789012":"all"}'
+ *   node wattpad.js --batch urls.txt --chapter-from 10 --chapter-to 50
  */
 
 "use strict";
@@ -131,6 +133,35 @@ function parseChapterSelection(str) {
   return indices.size ? indices : null;
 }
 
+/**
+ * Giao selection (Set hoặc null = tất cả) với phạm vi chapter 1-based (from/to có thể null = đầu/cuối).
+ */
+function resolveChapterSelectionSet(total, selection, range) {
+  let rangeSet = null;
+  if (range && (range.from != null || range.to != null)) {
+    const from = range.from != null ? Math.max(1, range.from) : 1;
+    const to = range.to != null ? Math.min(total, range.to) : total;
+    if (from > to) {
+      throw new Error(`Phạm vi chương không hợp lệ: từ ${from} đến ${to} (mục lục có ${total} chương).`);
+    }
+    rangeSet = new Set();
+    for (let i = from; i <= to; i++) rangeSet.add(i);
+  }
+  if (!rangeSet && (selection === null || selection === undefined)) return null;
+  if (rangeSet && (selection === null || selection === undefined)) return rangeSet;
+  if (!rangeSet && selection) return selection.size ? selection : null;
+  if (rangeSet && selection) {
+    const combined = new Set([...selection].filter(i => rangeSet.has(i)));
+    if (combined.size === 0) {
+      throw new Error(
+        `Không còn chương nào sau khi giao «chương đã chọn» với phạm vi từ/đến chương (mục lục có ${total} chương).`,
+      );
+    }
+    return combined;
+  }
+  return rangeSet;
+}
+
 // ══════════════════════════════════════════════════════════════
 // HTTP
 // ══════════════════════════════════════════════════════════════
@@ -149,6 +180,15 @@ async function fetchWithRetry(url, opts = {}, retries = MAX_RETRIES) {
         logLine(`  ⏳ Rate limited (429), đợi ${wait/1000}s...`);
         await sleep(wait);
         continue;
+      }
+
+      if (res.status === 408 || res.status === 503 || res.status === 502) {
+        if (attempt < retries) {
+          const wait = RETRY_DELAYS[attempt] || 15000;
+          logLine(`  ⏳ HTTP ${res.status} (timeout/tạm thời), đợi ${wait/1000}s rồi thử lại...`);
+          await sleep(wait);
+          continue;
+        }
       }
 
       if (attempt === retries) throw new Error(`HTTP ${res.status}: ${url}`);
@@ -578,15 +618,17 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
   logLine(`   📚 ${meta.title}`);
   logLine(`   ✍  ${meta.user?.name || "Unknown"}`);
 
-  const selectedParts = opts.chapterSelection
-    ? parts.filter((_, i) => opts.chapterSelection.has(i + 1))
-    : parts;
+  const chapterSet = resolveChapterSelectionSet(parts.length, opts.chapterSelection ?? null, opts.chapterRange ?? null);
+  const selectedParts = chapterSet ? parts.filter((_, i) => chapterSet.has(i + 1)) : parts;
 
-  logLine(
-    opts.chapterSelection
-      ? `   📑 ${selectedParts.length}/${parts.length} chapters (theo chapters_map / UI)`
-      : `   📑 ${selectedParts.length}/${parts.length} chapters được chọn`,
-  );
+  const hasMap = !!opts.usedChaptersMap;
+  const hasRange = opts.chapterRange && (opts.chapterRange.from != null || opts.chapterRange.to != null);
+  let selLabel = `   📑 ${selectedParts.length}/${parts.length} chapters`;
+  if (hasMap && hasRange) selLabel += " (giao chapters_map + từ/đến chương)";
+  else if (hasMap) selLabel += " (theo chapters_map / UI)";
+  else if (hasRange) selLabel += " (theo từ/đến chương)";
+  else selLabel += " (toàn bộ mục lục)";
+  logLine(selLabel);
 
   const doneCount = selectedParts.filter(p => {
     const c = storyState.chapters[p.url];
@@ -685,7 +727,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v2.0
+Wattpad Downloader v2.1
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -697,6 +739,8 @@ Options:
   --batch  <urls.txt>
   --chapters-map <json>         Ví dụ: '{"123456":"1-5,10","789012":"all"}' (CLI; trên Actions dùng file)
   --chapters-map-file <path>   Đọc JSON map từ file (tránh lỗi quote trong bash/GitHub Actions)
+  --chapter-from <n>           Chương bắt đầu (1-based, theo mục lục), áp dụng mỗi story trong batch
+  --chapter-to <n>             Chương kết thúc (gồm cả n). Để một trong hai = đầu hoặc cuối mục lục
   --throttle-ms <ms>            Delay giữa chapters (mặc định: ${DEFAULT_THROTTLE_MS}; chỉ sau request mạng)
   --save-every <n>              Ghi state sau mỗi n chapter tải mạng (mặc định: ${DEFAULT_SAVE_EVERY} = mỗi chapter). N>1 giảm IO
   --max-part-mb <số>            TXT/MD/JSON (chế độ gộp): tối đa MB mỗi phần. 0 = một file. Vd: 20
@@ -711,6 +755,8 @@ Options:
   let saveEvery = DEFAULT_SAVE_EVERY;
   let maxPartMb = 0;
   let textLayout = "merged";
+  /** @type {{ from: number|null, to: number|null }|null} */
+  let chapterRange = null;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -728,6 +774,16 @@ Options:
     else if (a === "--max-part-mb"  && args[i+1]) {
       const v = parseFloat(String(args[++i]).replace(",", "."));
       maxPartMb = Number.isFinite(v) && v > 0 ? v : 0;
+    }
+    else if (a === "--chapter-from" && args[i+1]) {
+      if (!chapterRange) chapterRange = { from: null, to: null };
+      const n = parseInt(args[++i], 10);
+      chapterRange.from = Number.isFinite(n) ? n : null;
+    }
+    else if (a === "--chapter-to" && args[i+1]) {
+      if (!chapterRange) chapterRange = { from: null, to: null };
+      const n = parseInt(args[++i], 10);
+      chapterRange.to = Number.isFinite(n) ? n : null;
     }
     else if (a === "--chapters-map" && args[i+1]) {
       try {
@@ -767,7 +823,7 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v2.0`);
+  console.log(`Wattpad Downloader v2.1`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
@@ -778,6 +834,11 @@ Options:
   if (maxPartMb > 0 && textLayout !== "per-chapter") console.log(`Parts  : TXT/MD/JSON gộp — tối đa ~${maxPartMb} MB/phần (UTF-8)`);
   if (maxPartMb > 0 && textLayout === "per-chapter") console.log(`Parts  : max_part_mb bỏ qua khi per-chapter (mỗi file = một chương)`);
   if (Object.keys(chaptersMap).length) console.log(`Map    : chapters_map (${Object.keys(chaptersMap).length} story)`);
+  if (chapterRange && (chapterRange.from != null || chapterRange.to != null)) {
+    const a = chapterRange.from != null ? String(chapterRange.from) : "1";
+    const b = chapterRange.to != null ? String(chapterRange.to) : "cuối";
+    console.log(`Range  : chapter ${a} → ${b} (mỗi story)`);
+  }
   console.log(`${"═".repeat(60)}`);
 
   const summary = { ok: [], fail: [] };
@@ -793,7 +854,16 @@ Options:
         outputDir,
         state,
         stateFile,
-        { chapterSelection: selection, throttleMs, saveEvery, maxPartBytes, maxPartMb, textLayout },
+        {
+          chapterSelection: selection,
+          chapterRange,
+          usedChaptersMap: Object.keys(chaptersMap).length > 0,
+          throttleMs,
+          saveEvery,
+          maxPartBytes,
+          maxPartMb,
+          textLayout,
+        },
       );
       summary.ok.push({ url, files: results.filter(r=>r.ok).map(r=>r.filename) });
     } catch (e) {

@@ -1,12 +1,13 @@
-## Wattpad Downloader — GitHub Actions (v2.0)
+## Wattpad Downloader — GitHub Actions (v2.1)
 
 Chạy tải truyện Wattpad về **EPUB/TXT/Markdown/JSON** trên GitHub Actions, rồi tải file về máy qua **Artifacts** (máy bạn không cần crawl Wattpad).
 
 ### Cách dùng nhanh
 
-1) Vào tab **Actions** → workflow **Wattpad Downloader v2.0**
+1) Vào tab **Actions** → workflow **Wattpad Downloader v2.1**
 2) Bấm **Run workflow**
    - **urls**: dán URL (mỗi dòng 1) hoặc để trống để dùng `urls.txt`
+   - **chapter_from** / **chapter_to** (tuỳ chọn): giới hạn chương theo mục lục (1-based) cho **mỗi** URL trong batch; giao với `chapters_map` nếu gửi từ UI
    - **format**: chọn định dạng xuất
    - **text_layout**: `merged` (gộp file, dùng **max_part_mb**) hoặc `per_chapter` (mỗi chương một file cho txt/md/json)
    - **throttle_ms**: mặc định `900` (chỉ sau request tải mạng; resume từ cache nhanh hơn)
@@ -15,7 +16,7 @@ Chạy tải truyện Wattpad về **EPUB/TXT/Markdown/JSON** trên GitHub Actio
 
 ### Bạch Ngọc Sách (BNS) — có login
 
-- Workflow: **BNS Downloader v2.0**
+- Workflow: **BNS Downloader v2.1**
 - Cần tạo GitHub Secrets:
   - `BNS_USERNAME`
   - `BNS_PASSWORD`

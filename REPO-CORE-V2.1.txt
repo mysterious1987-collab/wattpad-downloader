@@ -1,0 +1,27 @@
+=== File cần thiết cho repo lõi v2.1 (kế thừa v2.0) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v2.1: --chapter-from/--chapter-to; giao với chapters_map; retry 408/503
+  bns.js
+  .github/workflows/download.yml   ← v2.1: inputs chapter_from / chapter_to
+  .github/workflows/bns-download.yml
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/
+  index.html          ← v2.1: Wattpad từ/đến chương; fetchViaProxy retry/408; BNS xem mục lục
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.1]
+  Snapshot đầy đủ trong Object Github/v2.1; v2.0 giữ nguyên trong Object Github/v2.0.
+  index.html: phạm vi chương Wattpad (mỗi URL một dải); BNS «Xem mục lục» (best-effort, có thể cần đăng nhập).
+  wattpad.js + download.yml: chapter_from/to → CLI --chapter-from --chapter-to
+  REPO-CORE-V2.0.txt: bản sao từ snapshot gốc (tham chiếu).
