@@ -1,4 +1,4 @@
-name: Wattpad Downloader v2.0
+name: Wattpad Downloader v2.1
 
 on:
   workflow_dispatch:
@@ -29,6 +29,16 @@ on:
 
       chapters_map:
         description: 'Chapter map JSON — sinh tự động từ UI, không cần nhập tay'
+        required: false
+        type: string
+
+      chapter_from:
+        description: 'Wattpad — chương bắt đầu (1-based, theo mục lục). Để trống = từ đầu. Áp dụng mỗi URL/story; giao với chapters_map nếu có.'
+        required: false
+        type: string
+
+      chapter_to:
+        description: 'Wattpad — chương kết thúc (gồm cả số này). Để trống = đến hết. Áp dụng mỗi URL/story.'
         required: false
         type: string
 
@@ -144,6 +154,10 @@ jobs:
           TEXT_LAYOUT="${{ github.event.inputs.text_layout || 'merged' }}"
 
           ARGS=(node wattpad.js --batch urls_run.txt --format "$FORMAT" --output ./output --state ./state.json --throttle-ms "$THROTTLE_MS" --save-every "$SAVE_EVERY")
+          CH_FROM="${{ github.event.inputs.chapter_from }}"
+          CH_TO="${{ github.event.inputs.chapter_to }}"
+          if [ -n "$CH_FROM" ]; then ARGS+=(--chapter-from "$CH_FROM"); fi
+          if [ -n "$CH_TO" ]; then ARGS+=(--chapter-to "$CH_TO"); fi
           if [ -n "$CHAPTERS_MAP" ]; then
             printf '%s' "$CHAPTERS_MAP" > chapters_map_run.json
             ARGS+=(--chapters-map-file chapters_map_run.json)
