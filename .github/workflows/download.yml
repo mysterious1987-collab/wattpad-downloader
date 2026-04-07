@@ -1,4 +1,4 @@
-name: Wattpad Downloader v2.2
+name: Wattpad Downloader v2.3
 
 on:
   workflow_dispatch:
