@@ -1,0 +1,24 @@
+=== File cần thiết cho repo lõi v2.3 (kế thừa v2.2) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js
+  bns.js              ← v2.3: hỗ trợ --batch (multi-link) trong 1 run
+  .github/workflows/download.yml
+  .github/workflows/bns-download.yml   ← v2.3: input story_urls
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/
+  index.html          ← v2.3: BNS textarea multi-link + auto-name artifact + toc preview (1 URL)
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.3]
+  Snapshot đầy đủ trong Object Github/v2.3; v2.2 giữ nguyên trong Object Github/v2.2.

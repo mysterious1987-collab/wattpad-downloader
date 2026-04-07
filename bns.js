@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bạch Ngọc Sách (bachngocsach.cc) Downloader — GitHub Actions edition v1.6
+ * Bạch Ngọc Sách (bachngocsach.cc) Downloader — GitHub Actions edition v2.3
  *
  * - Yêu cầu login (XenForo forum SSO).
  * - Lấy mục lục (page=all) → tải chương → xuất EPUB/TXT/MD/JSON.
@@ -10,6 +10,7 @@
  *
  * Usage:
  *   node bns.js --story-url "https://bachngocsach.cc/reader/quy-bi-chi-chu" --format epub,txt --output ./output --state ./bns-state.json
+ *   node bns.js --batch bns_urls.txt --format epub,txt --output ./output --state ./bns-state.json
  *   node bns.js ... --chapter-from 10 --chapter-to 50   # tuỳ chọn: chỉ tải & xuất chương 10–50 (theo mục lục)
  */
 
@@ -295,7 +296,7 @@ async function loginBns({ username, password, jar, afterLoginUrl }) {
 
 function normalizeStoryUrl(u) {
   let s = String(u || "").trim();
-  if (!s) throw new Error("Thiếu --story-url");
+  if (!s) throw new Error("Thiếu URL truyện (story-url)");
   if (!/^https?:\/\//i.test(s)) s = "https://" + s.replace(/^\/+/, "");
   const url = new URL(s);
   const host = url.hostname.replace(/^www\./i, "");
@@ -626,12 +627,14 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-BNS Downloader v1.6
+BNS Downloader v2.3
 ===================
 node bns.js --story-url <url> --format epub,txt,md,json --output ./output --state ./bns-state.json
+node bns.js --batch <file> --format epub,txt,md,json --output ./output --state ./bns-state.json
 
 Options:
-  --story-url <url>         (required) URL truyện, ví dụ: https://bachngocsach.cc/reader/quy-bi-chi-chu
+  --story-url <url>         URL truyện, ví dụ: https://bachngocsach.cc/reader/quy-bi-chi-chu
+  --batch <file>            Multi-link: mỗi dòng 1 URL truyện BNS (…/reader/<slug>)
   --format <list>           epub,txt,md,json (mặc định: epub)
   --output <dir>            (mặc định: ./output)
   --state <file>            (mặc định: ./bns-state.json)
@@ -642,6 +645,7 @@ Options:
   }
 
   let storyUrl = "";
+  let batchFile = "";
   let formats = ["epub"];
   let outputDir = "./output";
   let stateFile = "./bns-state.json";
@@ -655,6 +659,7 @@ Options:
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--story-url" && args[i + 1]) storyUrl = args[++i];
+    else if (a === "--batch" && args[i + 1]) batchFile = args[++i];
     else if (a === "--format" && args[i + 1]) formats = args[++i].split(",").map(s => s.trim()).filter(Boolean);
     else if (a === "--output" && args[i + 1]) outputDir = args[++i];
     else if (a === "--state" && args[i + 1]) stateFile = args[++i];
@@ -674,164 +679,196 @@ Options:
   }
 
   const jar = new CookieJar();
-  const fullStoryUrl = normalizeStoryUrl(storyUrl);
-  const tocUrl = `${fullStoryUrl}/muc-luc?page=all`;
-
   await fs.mkdir(outputDir, { recursive: true });
   const state = await loadState(stateFile);
-  const storyKey = fullStoryUrl;
-  if (!state[storyKey]) state[storyKey] = { meta: null, chapters: {} };
+
+  if (!batchFile && !String(storyUrl || "").trim()) {
+    throw new Error("Thiếu --story-url hoặc --batch");
+  }
+
+  let storyUrls = [];
+  if (batchFile) {
+    const content = await fs.readFile(path.resolve(batchFile), "utf8");
+    storyUrls = content
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith("#"));
+  } else {
+    storyUrls = [storyUrl];
+  }
+  if (!storyUrls.length) throw new Error("Danh sách story_url rỗng");
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`BNS Downloader v1.6`);
-  console.log(`Story  : ${fullStoryUrl}`);
+  console.log(`BNS Downloader v2.3`);
+  console.log(`Stories: ${storyUrls.length}`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Speed  : throttle=${throttleMs}ms | saveEvery=${saveEvery}`);
   console.log(`${"═".repeat(60)}\n`);
 
+  const firstUrl = normalizeStoryUrl(storyUrls[0]);
   console.log("🔐 Logging in...");
-  await loginBns({ username, password, jar, afterLoginUrl: fullStoryUrl });
+  await loginBns({ username, password, jar, afterLoginUrl: firstUrl });
   console.log("✅ Login OK");
 
-  console.log("📖 Mở trang truyện (bridge cookie Reader → mục lục)...");
-  await (
-    await fetchWithRetry(fullStoryUrl, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        Referer: `${BASE}/reader/index`,
-      },
-    }, jar)
-  ).text();
+  async function downloadOneStory(storyUrlRaw) {
+    const fullStoryUrl = normalizeStoryUrl(storyUrlRaw);
+    const tocUrl = `${fullStoryUrl}/muc-luc?page=all`;
+    const storyKey = fullStoryUrl;
+    if (!state[storyKey]) state[storyKey] = { meta: null, chapters: {} };
 
-  console.log("📚 Loading TOC...");
-  const tocHtml = await (
-    await fetchWithRetry(tocUrl, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        Referer: fullStoryUrl,
-      },
-    }, jar)
-  ).text();
-  if (readerPaywallHtml(tocHtml)) {
-    throw new Error("TOC vẫn bị paywall sau login. Nếu đã pull bns.js mới: kiểm tra quyền Reader / tài khoản.");
-  }
+    console.log(`\n${"─".repeat(60)}`);
+    console.log(`📖 ${fullStoryUrl}`);
 
-  if (!state[storyKey].meta) {
-    const storyHtml = await (await fetchWithRetry(fullStoryUrl, {}, jar)).text();
-    const title = extractTitleFromHtml(storyHtml) || fullStoryUrl.split("/").pop();
-    const coverUrl = parseCoverUrl(storyHtml);
-    state[storyKey].meta = { id: sanitizeFilename(fullStoryUrl.split("/").pop()), title, author: "", url: fullStoryUrl, coverUrl };
-    await saveState(stateFile, state);
-  }
+    console.log("📖 Mở trang truyện (bridge cookie Reader → mục lục)...");
+    await (
+      await fetchWithRetry(fullStoryUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Referer: `${BASE}/reader/index`,
+        },
+      }, jar)
+    ).text();
 
-  const meta = state[storyKey].meta;
-  const storySlug = fullStoryUrl.split("/").pop();
-  const toc = parseTocAll(tocHtml, storySlug);
-  console.log(`🔎 Found chapters: ${toc.length}`);
-  if (!toc.length) {
-    const snip = tocHtml.replace(/\s+/g, " ").slice(0, 500);
-    console.error(`TOC preview (${tocHtml.length} chars): ${snip}${tocHtml.length > 500 ? "…" : ""}`);
-    throw new Error("Không parse được danh sách chương từ TOC (xem log preview phía trên).");
-  }
-
-  const { slice: tocWork, from: rangeFrom, to: rangeTo } = resolveChapterRange(
-    toc,
-    chapterFromArg,
-    chapterToArg
-  );
-  if (tocWork.length < toc.length) {
-    console.log(`📌 Phạm vi: chương ${rangeFrom}–${rangeTo} (${tocWork.length} chương, bỏ qua phần còn lại của mục lục)`);
-  }
-
-  let cover = null;
-  if (meta.coverUrl) {
-    try {
-      const res = await fetchWithRetry(meta.coverUrl, {}, jar);
-      const buf = Buffer.from(await res.arrayBuffer());
-      const mime = res.headers.get("content-type") || "image/jpeg";
-      cover = { bytes: buf, mime };
-      console.log("🖼️ Cover: OK");
-    } catch (e) {
-      console.log(`🖼️ Cover: skip (${e.message})`);
-    }
-  }
-
-  let saveCountdown = saveEvery;
-  let downloaded = 0;
-
-  for (let i = 0; i < tocWork.length; i++) {
-    const ch = tocWork[i];
-    const cached = state[storyKey].chapters[ch.url];
-    if (cached?.status === "done" && cached?.paras?.length) continue;
-
-    console.log(`\n[${i + 1}/${tocWork.length}] ${ch.url}`);
-    try {
-      const html = await (
-        await fetchWithRetry(ch.url, {
-          headers: {
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            Referer: fullStoryUrl,
-          },
-        }, jar)
-      ).text();
-      const title = extractTitleFromHtml(html) || `Chương ${i + 1}`;
-      let parseHtml = html;
-      const enc = extractEncryptedContentPayload(html);
-      if (enc.length > 40) {
-        const dec = await decryptBnsChapterBody(enc, jar, ch.url);
-        if (dec) {
-          parseHtml = dec;
-          console.log("  🔓 Giải mã nội dung (encrypted-content → API)");
-        }
-      }
-      const paras = parseChapterParagraphs(parseHtml);
-      state[storyKey].chapters[ch.url] = { status: "done", title, paras };
-      console.log(`✓ ${title} (${paras.length} đoạn)`);
-    } catch (e) {
-      state[storyKey].chapters[ch.url] = { status: "error", title: ch.title || "", paras: [`[Lỗi: ${e.message}]`] };
-      console.log(`✗ ${e.message}`);
+    console.log("📚 Loading TOC...");
+    const tocHtml = await (
+      await fetchWithRetry(tocUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Referer: fullStoryUrl,
+        },
+      }, jar)
+    ).text();
+    if (readerPaywallHtml(tocHtml)) {
+      throw new Error("TOC vẫn bị paywall sau login. Kiểm tra quyền Reader / tài khoản.");
     }
 
-    downloaded++;
-    saveCountdown--;
-    if (saveCountdown <= 0) {
+    if (!state[storyKey].meta) {
+      const storyHtml = await (await fetchWithRetry(fullStoryUrl, {}, jar)).text();
+      const title = extractTitleFromHtml(storyHtml) || fullStoryUrl.split("/").pop();
+      const coverUrl = parseCoverUrl(storyHtml);
+      state[storyKey].meta = { id: sanitizeFilename(fullStoryUrl.split("/").pop()), title, author: "", url: fullStoryUrl, coverUrl };
       await saveState(stateFile, state);
-      saveCountdown = saveEvery;
     }
-    if (i < tocWork.length - 1) await sleep(throttleMs);
+
+    const meta = state[storyKey].meta;
+    const storySlug = fullStoryUrl.split("/").pop();
+    const toc = parseTocAll(tocHtml, storySlug);
+    console.log(`🔎 Found chapters: ${toc.length}`);
+    if (!toc.length) {
+      const snip = tocHtml.replace(/\s+/g, " ").slice(0, 500);
+      console.error(`TOC preview (${tocHtml.length} chars): ${snip}${tocHtml.length > 500 ? "…" : ""}`);
+      throw new Error("Không parse được danh sách chương từ TOC (xem log preview phía trên).");
+    }
+
+    const { slice: tocWork, from: rangeFrom, to: rangeTo } = resolveChapterRange(
+      toc,
+      chapterFromArg,
+      chapterToArg
+    );
+    if (tocWork.length < toc.length) {
+      console.log(`📌 Phạm vi: chương ${rangeFrom}–${rangeTo} (${tocWork.length} chương, bỏ qua phần còn lại của mục lục)`);
+    }
+
+    let cover = null;
+    if (meta.coverUrl) {
+      try {
+        const res = await fetchWithRetry(meta.coverUrl, {}, jar);
+        const buf = Buffer.from(await res.arrayBuffer());
+        const mime = res.headers.get("content-type") || "image/jpeg";
+        cover = { bytes: buf, mime };
+        console.log("🖼️ Cover: OK");
+      } catch (e) {
+        console.log(`🖼️ Cover: skip (${e.message})`);
+      }
+    }
+
+    let saveCountdown = saveEvery;
+    let downloaded = 0;
+
+    for (let i = 0; i < tocWork.length; i++) {
+      const ch = tocWork[i];
+      const cached = state[storyKey].chapters[ch.url];
+      if (cached?.status === "done" && cached?.paras?.length) continue;
+
+      console.log(`\n[${i + 1}/${tocWork.length}] ${ch.url}`);
+      try {
+        const html = await (
+          await fetchWithRetry(ch.url, {
+            headers: {
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              Referer: fullStoryUrl,
+            },
+          }, jar)
+        ).text();
+        const title = extractTitleFromHtml(html) || `Chương ${i + 1}`;
+        let parseHtml = html;
+        const enc = extractEncryptedContentPayload(html);
+        if (enc.length > 40) {
+          const dec = await decryptBnsChapterBody(enc, jar, ch.url);
+          if (dec) {
+            parseHtml = dec;
+            console.log("  🔓 Giải mã nội dung (encrypted-content → API)");
+          }
+        }
+        const paras = parseChapterParagraphs(parseHtml);
+        state[storyKey].chapters[ch.url] = { status: "done", title, paras };
+        console.log(`✓ ${title} (${paras.length} đoạn)`);
+      } catch (e) {
+        state[storyKey].chapters[ch.url] = { status: "error", title: ch.title || "", paras: [`[Lỗi: ${e.message}]`] };
+        console.log(`✗ ${e.message}`);
+      }
+
+      downloaded++;
+      saveCountdown--;
+      if (saveCountdown <= 0) {
+        await saveState(stateFile, state);
+        saveCountdown = saveEvery;
+      }
+      if (i < tocWork.length - 1) await sleep(throttleMs);
+    }
+
+    await saveState(stateFile, state);
+
+    // Build chapters in TOC order (chỉ phạm vi đã chọn)
+    const chapters = tocWork.map((c, idx) => {
+      const x = state[storyKey].chapters[c.url];
+      return {
+        index: idx + 1,
+        url: c.url,
+        title: x?.title || c.title || `Chương ${idx + 1}`,
+        paras: x?.paras?.length ? x.paras : ["[Chưa tải được]"],
+      };
+    });
+
+    const safe = sanitizeFilename(meta.title || storySlug || "bns_story");
+    for (const fmt of formats) {
+      const filename = path.join(outputDir, `${safe}.${fmt}`);
+      console.log(`\n📦 Export ${fmt.toUpperCase()}...`);
+      if (fmt === "epub") {
+        await fs.writeFile(filename, await toEpub(meta, chapters, cover));
+      } else if (fmt === "txt") {
+        await fs.writeFile(filename, toTxt(meta, chapters), "utf8");
+      } else if (fmt === "md") {
+        await fs.writeFile(filename, toMarkdown(meta, chapters), "utf8");
+      } else {
+        await fs.writeFile(filename, toJson(meta, chapters), "utf8");
+      }
+      console.log(`✅ ${filename}`);
+    }
+
+    console.log(`\nDone. Downloaded new chapters this story: ${downloaded}`);
   }
 
-  await saveState(stateFile, state);
-
-  // Build chapters in TOC order (chỉ phạm vi đã chọn)
-  const chapters = tocWork.map((c, idx) => {
-    const x = state[storyKey].chapters[c.url];
-    return {
-      index: idx + 1,
-      url: c.url,
-      title: x?.title || c.title || `Chương ${idx + 1}`,
-      paras: x?.paras?.length ? x.paras : ["[Chưa tải được]"],
-    };
-  });
-
-  const safe = sanitizeFilename(meta.title || "bns_story");
-  for (const fmt of formats) {
-    const filename = path.join(outputDir, `${safe}.${fmt}`);
-    console.log(`\n📦 Export ${fmt.toUpperCase()}...`);
-    if (fmt === "epub") {
-      await fs.writeFile(filename, await toEpub(meta, chapters, cover));
-    } else if (fmt === "txt") {
-      await fs.writeFile(filename, toTxt(meta, chapters), "utf8");
-    } else if (fmt === "md") {
-      await fs.writeFile(filename, toMarkdown(meta, chapters), "utf8");
-    } else {
-      await fs.writeFile(filename, toJson(meta, chapters), "utf8");
+  for (let i = 0; i < storyUrls.length; i++) {
+    const u = storyUrls[i];
+    try {
+      await downloadOneStory(u);
+    } catch (e) {
+      console.error(`\n❌ Lỗi story (${i + 1}/${storyUrls.length}): ${u}`);
+      console.error(`   ${e.message}`);
     }
-    console.log(`✅ ${filename}`);
   }
-
-  console.log(`\nDone. Downloaded new chapters this run: ${downloaded}`);
 }
 
 main().catch(e => {

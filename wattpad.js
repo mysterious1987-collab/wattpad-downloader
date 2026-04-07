@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v2.2
+ * Wattpad Batch Downloader — GitHub Actions edition v2.3
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
@@ -10,6 +10,7 @@
  * - v2.0: UI index.html gửi chapters_map khớp DOM (fix chọn subset chapter).
  * - v2.1: --chapter-from / --chapter-to (mỗi story trong batch); giao với chapters_map; retry 408/503 khi fetch.
  * - v2.2: (UI index.html) fetch metadata Wattpad: fields dự phòng + proxy r.jina.ai / AllOrigins raw — xem HISTORY.
+ * - v2.3: (BNS) multi-link + auto-name; wattpad core giữ nguyên v2.2.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -728,7 +729,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v2.2
+Wattpad Downloader v2.3
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -824,7 +825,7 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v2.2`);
+  console.log(`Wattpad Downloader v2.3`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
