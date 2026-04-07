@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Ebook Downloader v2.1 · Wattpad + BNS</title>
+<title>Ebook Downloader v2.2 · Wattpad + BNS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -238,7 +238,7 @@ textarea{min-height:90px;line-height:1.7}
         <p>Wattpad + Bạch Ngọc Sách · GitHub Actions</p>
       </div>
     </div>
-    <span class="version-badge">v2.1</span>
+    <span class="version-badge">v2.2</span>
   </header>
 
   <!-- ── SETUP ── -->
@@ -260,7 +260,7 @@ textarea{min-height:90px;line-height:1.7}
           <div class="guide-step"><b style="color:var(--text)">Permissions</b>: <code>Actions → Read and Write</code> &nbsp;·&nbsp; <code>Contents → Read</code></div>
           <div class="guide-step">Copy token → paste vào ô bên dưới</div>
           <div class="guide-step"><b style="color:var(--text)">BNS (Bạch Ngọc Sách)</b>: tạo Secrets <code>BNS_USERNAME</code> và <code>BNS_PASSWORD</code> trong repo (Settings → Secrets → Actions)</div>
-          <div class="guide-step"><b style="color:var(--text)">Wattpad v2.1</b>: <code>chapters_map</code> + <b>Từ/Đến chương</b> (mỗi URL một dải; giao với lưới chương nếu dùng). «Xem chapters» retry/408. Cache <code>state.json</code> + <code>state-bodies</code>, <code>text_layout</code>, <code>max_part_mb</code>.</div>
+          <div class="guide-step"><b style="color:var(--text)">Wattpad v2.2</b>: «Xem chapters» — API Wattpad thử <code>fields</code> đầy đủ rồi tối giản (tránh 400); proxy: AllOrigins + raw + r.jina.ai. <code>chapters_map</code>, Từ/Đến chương, cache như v2.1.</div>
         </div>
       </div>
       <div class="field-row">
@@ -324,7 +324,7 @@ textarea{min-height:90px;line-height:1.7}
     <div class="field">
       <label>max_part_mb <span style="color:var(--muted)">(TXT/MD/JSON — tối đa MB mỗi file phần; 0 = một file)</span></label>
       <input type="text" id="inWpMaxPartMb" placeholder="0 hoặc 20" value="0" oninput="updateTriggerBtn()"/>
-      <div class="hint">Chế độ <b>gộp</b>: để <code>0</code> hoặc đặt MB mỗi phần. Chế độ <b>mỗi chương một file</b> bỏ qua giới hạn này (khớp <code>download.yml</code> v2.1).</div>
+      <div class="hint">Chế độ <b>gộp</b>: để <code>0</code> hoặc đặt MB mỗi phần. Chế độ <b>mỗi chương một file</b> bỏ qua giới hạn này (khớp <code>download.yml</code> v2.2).</div>
     </div>
     <div class="field">
       <label>TXT / MD / JSON — bố cục file</label>
@@ -332,7 +332,7 @@ textarea{min-height:90px;line-height:1.7}
         <option value="merged">Gộp (một hoặc vài file lớn — dùng max_part_mb)</option>
         <option value="per_chapter">Mỗi chương một file (thư mục *_txt_chapters / *_md_chapters / *_json_chapters)</option>
       </select>
-      <div class="hint">Chế độ <b>mỗi chương một file</b> cần repo có <code>download.yml</code> v2.1 (input <code>text_layout</code>) và <code>wattpad.js</code> v2.1. Chế độ <b>gộp</b> không gửi <code>text_layout</code> → tương thích workflow cũ hơn.</div>
+      <div class="hint">Chế độ <b>mỗi chương một file</b> cần repo có <code>download.yml</code> v2.2 (input <code>text_layout</code>) và <code>wattpad.js</code> v2.2. Chế độ <b>gộp</b> không gửi <code>text_layout</code> → tương thích workflow cũ hơn.</div>
     </div>
     </div>
 
@@ -398,7 +398,7 @@ textarea{min-height:90px;line-height:1.7}
       <button type="button" class="btn-secondary" id="btnWpSel" onclick="triggerWorkflow('wattpad_selected')" disabled>
         <span id="btnIconWpSel">✅</span><span id="btnTextWpSel">Tải từ các chapter được chọn</span>
       </button>
-      <div class="hint" style="margin-top:0">«Toàn bộ» không gửi <code>chapters_map</code>. «Được chọn» cần đã bấm <b>Xem chapters</b>; repo cần <code>wattpad.js</code> + <code>download.yml</code> v2.1 (<code>--chapters-map-file</code>, <code>chapter_from</code>/<code>chapter_to</code>).</div>
+      <div class="hint" style="margin-top:0">«Toàn bộ» không gửi <code>chapters_map</code>. «Được chọn» cần đã bấm <b>Xem chapters</b>; repo cần <code>wattpad.js</code> + <code>download.yml</code> v2.2 (<code>--chapters-map-file</code>, <code>chapter_from</code>/<code>chapter_to</code>).</div>
     </div>
     <button type="button" class="btn-primary" id="btnTriggerBns" onclick="triggerWorkflow('bns')" disabled style="display:none;margin-top:18px">
       <span id="btnIconBns">🚀</span><span id="btnTextBns">Bắt đầu tải BNS</span>
@@ -655,18 +655,22 @@ async function fetchStoryMeta_safe(url){
   try {
     const sid = extractStoryIdFromUrl(url);
     if(!sid) throw {msg:'Không tìm được Story ID từ URL', code:0};
-    const apiUrl = `https://www.wattpad.com/api/v3/stories/${sid}?fields=id,title,user,cover,completed,parts(id,title,url,wordCount)`;
-
+    const fieldVariants = [
+      'id,title,user,cover,completed,parts(id,title,url,wordCount)',
+      'id,title,user,cover,completed,parts(id,title,url)',
+    ];
     let meta = null, lastErr = '', lastCode = 0;
-
-    // unified fetch: direct → proxy
-    try {
-      meta = await fetchViaProxy(apiUrl, true);
-    } catch(e) {
-      lastErr = e?.message || 'Không lấy được metadata';
+    for(const fields of fieldVariants){
+      const apiUrl = `https://www.wattpad.com/api/v3/stories/${encodeURIComponent(sid)}?fields=${encodeURIComponent(fields)}`;
+      try{
+        meta = await fetchViaProxy(apiUrl, true);
+        if(meta && meta.id) break;
+      }catch(e){
+        lastErr = e?.message || 'Không lấy được metadata';
+      }
     }
 
-    if(!meta) throw {msg: lastErr||'Không lấy được metadata', code: lastCode};
+    if(!meta || !meta.id) throw {msg: lastErr||'Không lấy được metadata', code: lastCode};
 
     // Validate: story tồn tại nhưng bị khoá → parts rỗng không phải lỗi
     const realId = String(meta.id);
@@ -682,12 +686,32 @@ async function fetchStoryMeta_safe(url){
 }
 
 function classifyHttpError(status){
+  if(status===400) return 'Wattpad từ chối yêu cầu (400) — thường do API/fields hoặc chặn tạm; đã thử fields tối giản và proxy dự phòng';
   if(status===404) return 'Story không tồn tại hoặc đã bị xoá (404)';
   if(status===403) return 'Story bị khoá hoặc cần đăng nhập (403)';
   if(status===408) return 'Timeout phía server hoặc mạng (408) — thử lại sau vài giây';
   if(status===429) return 'Quá nhiều request, thử lại sau (429)';
   if(status>=500)  return `Server Wattpad lỗi (${status})`;
   return `HTTP ${status}`;
+}
+
+/** Header giống trình duyệt trên wattpad.com — giảm 400/CORS lạ */
+function wattpadFetchHeaders(json){
+  const h = json
+    ? { Accept: 'application/json, text/plain, */*' }
+    : { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
+  return {
+    ...h,
+    Referer: 'https://www.wattpad.com/',
+    Origin: 'https://www.wattpad.com',
+  };
+}
+
+function isWattpadUrl(url){
+  try{
+    const h = new URL(url).hostname.replace(/^www\./i, '');
+    return h === 'wattpad.com';
+  }catch{ return false; }
 }
 
 function normalizeUrl(raw){
@@ -724,6 +748,44 @@ async function fetchViaAllOrigins(url, json, timeoutMs){
   return d.contents;
 }
 
+async function fetchViaAllOriginsRaw(url, json, timeoutMs){
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+  if(!res.ok) throw new Error(`AllOrigins-raw ${res.status}`);
+  const text = await res.text();
+  if(json){
+    try{ return JSON.parse(text); }catch{ throw new Error('JSON parse (raw) thất bại'); }
+  }
+  return text;
+}
+
+function parseJsonLenient(text){
+  const t = String(text || '').trim();
+  if(!t) throw new Error('Rỗng');
+  if(t.startsWith('```')){
+    const m = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if(m){
+      try{ return JSON.parse(m[1].trim()); }catch{ /* fall through */ }
+    }
+  }
+  return JSON.parse(t);
+}
+
+/** r.jina.ai/http://full-url — thường vượt được khi AllOrigins/corsproxy lỗi */
+async function fetchViaJinaReader(url, json, timeoutMs){
+  const proxyUrl = 'https://r.jina.ai/' + url.replace(/^\s+/, '');
+  const res = await fetch(proxyUrl, {
+    headers: json ? { Accept: 'application/json,text/plain,*/*' } : { Accept: 'text/html,*/*' },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if(!res.ok) throw new Error(`r.jina.ai ${res.status}`);
+  const text = await res.text();
+  if(json){
+    try{ return parseJsonLenient(text); }catch{ throw new Error('JSON parse (jina) thất bại'); }
+  }
+  return text;
+}
+
 async function fetchViaCorsProxyIo(url, json, timeoutMs){
   const u = `https://corsproxy.io/?${encodeURIComponent(url)}`;
   const headers = json ? { Accept:'application/json' } : { Accept:'text/html,*/*;q=0.9' };
@@ -731,23 +793,24 @@ async function fetchViaCorsProxyIo(url, json, timeoutMs){
   if(!res.ok) throw new Error(`corsproxy.io ${res.status}`);
   const text = await res.text();
   if(json){
-    try{ return JSON.parse(text); }catch{ throw new Error('JSON parse (proxy 2) thất bại'); }
+    try{ return JSON.parse(text); }catch{ throw new Error('JSON parse (corsproxy) thất bại'); }
   }
   return text;
 }
 
 async function fetchViaProxy(url, json=false){
-  const headers = json ? { Accept:'application/json' } : { Accept:'text/html,application/xhtml+xml,*/*;q=0.9' };
+  const wp = isWattpadUrl(url);
+  const base = wp ? wattpadFetchHeaders(json) : (json ? { Accept:'application/json' } : { Accept:'text/html,application/xhtml+xml,*/*;q=0.9' });
   const directTimeout = 28000;
-  const proxyTimeout = 40000;
+  const proxyTimeout = 45000;
   const maxDirect = 3;
   let lastStatus = 0;
   for(let attempt = 0; attempt < maxDirect; attempt++){
     try{
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(directTimeout) });
+      const res = await fetch(url, { headers: { ...base }, signal: AbortSignal.timeout(directTimeout) });
       lastStatus = res.status;
       if(res.ok) return json ? await res.json() : await res.text();
-      if([408,429,502,503].includes(res.status) && attempt < maxDirect - 1){
+      if([400,408,429,502,503].includes(res.status) && attempt < maxDirect - 1){
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1) + 400));
         continue;
       }
@@ -755,16 +818,18 @@ async function fetchViaProxy(url, json=false){
       if(attempt < maxDirect - 1) await new Promise(r => setTimeout(r, 1000 * (attempt + 1) + 400));
     }
   }
-  try{
-    return await fetchViaAllOrigins(url, json, proxyTimeout);
-  }catch(e1){
-    try{
-      return await fetchViaCorsProxyIo(url, json, proxyTimeout);
-    }catch(e2){
-      const hint = lastStatus ? classifyHttpError(lastStatus) : 'Không kết nối trực tiếp (CORS / mạng)';
-      throw new Error(`${hint} · proxy1: ${e1.message} · proxy2: ${e2.message}`);
-    }
+  const chain = [
+    () => fetchViaAllOrigins(url, json, proxyTimeout),
+    () => fetchViaAllOriginsRaw(url, json, proxyTimeout),
+    () => fetchViaJinaReader(url, json, proxyTimeout),
+    () => fetchViaCorsProxyIo(url, json, proxyTimeout),
+  ];
+  const errs = [];
+  for(const fn of chain){
+    try{ return await fn(); }catch(e){ errs.push(e?.message || String(e)); }
   }
+  const hint = lastStatus ? classifyHttpError(lastStatus) : 'Không kết nối trực tiếp (CORS / mạng)';
+  throw new Error(`${hint} · ${errs.join(' · ')}`);
 }
 
 const BNS_BASE = 'https://bachngocsach.cc';

@@ -1,5 +1,10 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.2 (2026-04-07)
+
+- **Wattpad UI — «Xem chapters» / URL có slug Unicode (vd. `%C4%91`)**: metadata lấy qua **story id** (không phụ thuộc slug). Gọi API với `fields` **đầy đủ** rồi **tối giản** (bỏ `wordCount` nếu Wattpad trả 400). `fetchViaProxy`: thêm **Referer/Origin** wattpad.com; retry direct khi **400**; chuỗi proxy **AllOrigins (get) → AllOrigins raw → r.jina.ai → corsproxy.io** (jina thường thay thế được khi corsproxy 403). `classifyHttpError(400)` rõ nghĩa hơn.
+- Gói **`Object Github/v2.2`**: snapshot đầy đủ; `REPO-CORE-V2.2.txt`.
+
 ### v2.1 (2026-04-07)
 
 - **Wattpad — phạm vi chương (từ/đến)**: giống tab BNS; áp dụng **riêng từng URL** trong batch (chỉ số 1-based theo mục lục API). Workflow `download.yml` inputs `chapter_from` / `chapter_to`; `wattpad.js` `--chapter-from` / `--chapter-to`. Nếu vừa có `chapters_map` vừa có range → **giao** hai điều kiện; rỗng → lỗi rõ ràng trên log.
