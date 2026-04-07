@@ -1,0 +1,25 @@
+=== File cần thiết cho repo lõi v2.2 (kế thừa v2.1) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v2.2 (nhãn phiên bản; logic tải như v2.1)
+  bns.js
+  .github/workflows/download.yml
+  .github/workflows/bns-download.yml
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/
+  index.html          ← v2.2: fetch Wattpad metadata — fields dự phòng + proxy jina/raw + headers
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.2]
+  Sửa lỗi «Xem chapters» (400 / proxy Failed / corsproxy 403) — chủ yếu trong index.html.
+  v2.1 giữ nguyên trong Object Github/v2.1.
