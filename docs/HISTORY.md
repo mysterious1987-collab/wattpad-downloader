@@ -1,5 +1,13 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.1 (2026-04-07)
+
+- **Wattpad — phạm vi chương (từ/đến)**: giống tab BNS; áp dụng **riêng từng URL** trong batch (chỉ số 1-based theo mục lục API). Workflow `download.yml` inputs `chapter_from` / `chapter_to`; `wattpad.js` `--chapter-from` / `--chapter-to`. Nếu vừa có `chapters_map` vừa có range → **giao** hai điều kiện; rỗng → lỗi rõ ràng trên log.
+- **Wattpad — «Xem chapters» / fetch**: `fetchViaProxy` retry khi 408/429/502/503, timeout direct/proxy dài hơn, fallback proxy phụ (`corsproxy.io`) nếu AllOrigins lỗi; `classifyHttpError` có nhánh 408.
+- **Wattpad — Actions / CLI**: `fetchWithRetry` backoff rõ hơn cho **408** và **503** (timeout / tạm thời).
+- **BNS — «Xem mục lục»**: nút trên UI tải `…/muc-luc?page=all` (best-effort; truyện cần đăng nhập có thể không đầy đủ trong trình duyệt).
+- Gói **`Object Github/v2.1`**: snapshot repo đầy đủ; `REPO-CORE-V2.1.txt`.
+
 ### v2.0 (2026-04-04)
 
 - **Hai nút Wattpad**: «Tải toàn bộ các chapter» (không gửi `chapters_map`) và «Tải từ các chapter được chọn» (gửi map từ DOM).
