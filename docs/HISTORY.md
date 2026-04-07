@@ -1,5 +1,12 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.3 (2026-04-07)
+
+- **BNS — multi-link**: dán nhiều URL (mỗi dòng 1) trong tab BNS → workflow tải tất cả trong **1 run**, mỗi truyện xuất file riêng theo format đã chọn (EPUB/TXT/MD/JSON) trong cùng artifact.
+- **BNS — auto đặt tên artifact theo link**: checkbox mặc định bật; 1 URL → `<slug>_<YYYY-MM-DD>`, nhiều URL → `bns_batch-<n>_<YYYY-MM-DD>`. Tắt checkbox → nhập tay.
+- **BNS — xem mục lục**: chuyển ô URL BNS sang textarea; nút «Xem mục lục» chỉ bật khi có đúng **1** URL hợp lệ; vẫn best-effort (site có thể chặn preview trong browser).
+- Gói **`Object Github/v2.3`**: snapshot đầy đủ; `REPO-CORE-V2.3.txt`.
+
 ### v2.2 (2026-04-07)
 
 - **Wattpad UI — «Xem chapters» / URL có slug Unicode (vd. `%C4%91`)**: metadata lấy qua **story id** (không phụ thuộc slug). Gọi API với `fields` **đầy đủ** rồi **tối giản** (bỏ `wordCount` nếu Wattpad trả 400). `fetchViaProxy`: thêm **Referer/Origin** wattpad.com; retry direct khi **400**; chuỗi proxy **AllOrigins (get) → AllOrigins raw → r.jina.ai → corsproxy.io** (jina thường thay thế được khi corsproxy 403). `classifyHttpError(400)` rõ nghĩa hơn.
