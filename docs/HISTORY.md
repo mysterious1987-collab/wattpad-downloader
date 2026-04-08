@@ -1,5 +1,13 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.4 (2026-04-08)
+
+- **Wattpad UI — «Xem chapters» / nhiều URL**: không còn gọi metadata **song song** toàn bộ URL (`Promise.all`); chuyển sang **lần lượt** + delay ngắn giữa các request để giảm **HTTP 400** khi dán danh sách dài. Sau vòng đầu, **thử lại một lần** các URL vẫn lỗi (pause ~2,5s). Nút «Thử lại lỗi» cũng xử lý **tuần tự**.
+- **Wattpad — tên file output**: checkbox mặc định **bật** — dùng tiêu đề API (như cũ). Tắt → `--file-basename story-id` / `wattpad_<id>`. Workflow `download.yml` input `file_basename_mode` (`api_title` | `story_id`). CLI: `--file-basename api-title|story-id`.
+- **Wattpad UI — multi-link**: banner cảnh báo khi ≥2 URL (mỗi truyện một file trong cùng artifact; nên «Xem chapters» nếu chọn lọc).
+- **Wattpad Actions / CLI**: `fetchWithRetry` thêm **retry backoff cho HTTP 400** (metadata / request tạm bị từ chối).
+- Gói **`Object Github/v2.4`**: snapshot đầy đủ; `REPO-CORE-V2.4.txt`. v2.3 giữ nguyên trong `Object Github/v2.3`.
+
 ### v2.3 (2026-04-07)
 
 - **BNS — multi-link**: dán nhiều URL (mỗi dòng 1) trong tab BNS → workflow tải tất cả trong **1 run**, mỗi truyện xuất file riêng theo format đã chọn (EPUB/TXT/MD/JSON) trong cùng artifact.
