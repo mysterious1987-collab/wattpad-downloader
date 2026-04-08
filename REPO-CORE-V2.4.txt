@@ -1,0 +1,24 @@
+=== File cần thiết cho repo lõi v2.4 (kế thừa v2.3) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v2.4: --file-basename; retry HTTP 400
+  bns.js
+  .github/workflows/download.yml   ← v2.4: input file_basename_mode
+  .github/workflows/bns-download.yml
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/
+  index.html          ← v2.4: metadata tuần tự; checkbox tên file; cảnh báo multi-link Wattpad
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.4]
+  Snapshot đầy đủ trong Object Github/v2.4; v2.3 giữ nguyên trong Object Github/v2.3.

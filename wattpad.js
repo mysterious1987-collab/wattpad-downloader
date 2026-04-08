@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v2.3
+ * Wattpad Batch Downloader — GitHub Actions edition v2.4
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
@@ -11,6 +11,7 @@
  * - v2.1: --chapter-from / --chapter-to (mỗi story trong batch); giao với chapters_map; retry 408/503 khi fetch.
  * - v2.2: (UI index.html) fetch metadata Wattpad: fields dự phòng + proxy r.jina.ai / AllOrigins raw — xem HISTORY.
  * - v2.3: (BNS) multi-link + auto-name; wattpad core giữ nguyên v2.2.
+ * - v2.4: --file-basename api-title|story-id; retry HTTP 400 khi lấy metadata (Wattpad chặn tạm).
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -184,10 +185,11 @@ async function fetchWithRetry(url, opts = {}, retries = MAX_RETRIES) {
         continue;
       }
 
-      if (res.status === 408 || res.status === 503 || res.status === 502) {
+      if (res.status === 400 || res.status === 408 || res.status === 503 || res.status === 502) {
         if (attempt < retries) {
           const wait = RETRY_DELAYS[attempt] || 15000;
-          logLine(`  ⏳ HTTP ${res.status} (timeout/tạm thời), đợi ${wait/1000}s rồi thử lại...`);
+          const why = res.status === 400 ? "400 (từ chối tạm?)" : "timeout/tạm thời";
+          logLine(`  ⏳ HTTP ${res.status} (${why}), đợi ${wait/1000}s rồi thử lại...`);
           await sleep(wait);
           continue;
         }
@@ -682,8 +684,12 @@ async function downloadStory(url, formats, outputDir, state, stateFile, opts) {
     return { title: cached?.title || part.title, paras: cached?.paras || [{ text: "[Chưa tải được]" }] };
   });
 
-  const safe = sanitizeFilename(meta.title);
-  const basePathNoExt = path.join(outputDir, safe);
+  const basenameMode = opts.fileBasenameMode === "story_id" ? "story_id" : "api_title";
+  const baseSlug =
+    basenameMode === "story_id"
+      ? `wattpad_${storyId}`
+      : sanitizeFilename(meta.title) || `wattpad_${storyId}`;
+  const basePathNoExt = path.join(outputDir, baseSlug);
   const results = [];
   for (const fmt of formats) {
     logLine(`   Đang xuất ${fmt.toUpperCase()}...`);
@@ -729,13 +735,14 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v2.3
+Wattpad Downloader v2.4
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
 
 Options:
   --format epub,txt,md,json     (mặc định: epub)
+  --file-basename api-title|story-id   (mặc định: api-title — tên file theo tiêu đề API; story-id = wattpad_<id>)
   --output <dir>                (mặc định: ./output)
   --state  <file>               (mặc định: ./state.json)
   --batch  <urls.txt>
@@ -757,12 +764,18 @@ Options:
   let saveEvery = DEFAULT_SAVE_EVERY;
   let maxPartMb = 0;
   let textLayout = "merged";
+  let fileBasenameMode = "api_title";
   /** @type {{ from: number|null, to: number|null }|null} */
   let chapterRange = null;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if      (a === "--format"       && args[i+1]) formats   = args[++i].split(",").map(s=>s.trim()).filter(s=>["epub","txt","md","json"].includes(s));
+    else if (a === "--file-basename" && args[i+1]) {
+      const v = String(args[++i]).trim().toLowerCase().replace(/_/g, "-");
+      if (v === "story-id" || v === "id") fileBasenameMode = "story_id";
+      else fileBasenameMode = "api_title";
+    }
     else if (a === "--output"       && args[i+1]) outputDir = args[++i];
     else if (a === "--state"        && args[i+1]) stateFile = args[++i];
     else if (a === "--batch"        && args[i+1]) batchFile = args[++i];
@@ -825,8 +838,9 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v2.3`);
+  console.log(`Wattpad Downloader v2.4`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
+  console.log(`Files  : basename=${fileBasenameMode === "story_id" ? "story_id (wattpad_<id>)" : "api_title"}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
   console.log(`Stories: ${urls.length}`);
   console.log(`Speed  : throttle=${throttleMs}ms (sau tải mạng) | saveEvery=${saveEvery}`);
@@ -865,6 +879,7 @@ Options:
           maxPartBytes,
           maxPartMb,
           textLayout,
+          fileBasenameMode,
         },
       );
       summary.ok.push({ url, files: results.filter(r=>r.ok).map(r=>r.filename) });
