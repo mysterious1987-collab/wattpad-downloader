@@ -1,4 +1,4 @@
-name: Wattpad Downloader v2.3
+name: Wattpad Downloader v2.4
 
 on:
   workflow_dispatch:
@@ -68,6 +68,15 @@ on:
         options:
           - merged
           - per_chapter
+
+      file_basename_mode:
+        description: 'Tên file output: api_title (tiêu đề API) hoặc story_id (wattpad_<id>)'
+        required: false
+        default: 'api_title'
+        type: choice
+        options:
+          - api_title
+          - story_id
 
 jobs:
   download:
@@ -152,8 +161,10 @@ jobs:
           SAVE_EVERY="${{ github.event.inputs.save_every || '1' }}"
           MAX_PART_MB="${{ github.event.inputs.max_part_mb || '0' }}"
           TEXT_LAYOUT="${{ github.event.inputs.text_layout || 'merged' }}"
+          FILE_BN="${{ github.event.inputs.file_basename_mode || 'api_title' }}"
 
           ARGS=(node wattpad.js --batch urls_run.txt --format "$FORMAT" --output ./output --state ./state.json --throttle-ms "$THROTTLE_MS" --save-every "$SAVE_EVERY")
+          if [ "$FILE_BN" = "story_id" ]; then ARGS+=(--file-basename story-id); fi
           CH_FROM="${{ github.event.inputs.chapter_from }}"
           CH_TO="${{ github.event.inputs.chapter_to }}"
           if [ -n "$CH_FROM" ]; then ARGS+=(--chapter-from "$CH_FROM"); fi
