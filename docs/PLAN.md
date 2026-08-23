@@ -1,6 +1,12 @@
-## PLAN — v1.6
+## PLAN — v2.5
 
-### Goal
+### v2.5 (2026-08-23)
+
+- Fix TXT/MD/JSON mất xuống dòng: `htmlFragmentToText` + tách `paras` theo `<br>` / block tags; EPUB tách `<p>` an toàn.
+- Cache Actions: `wattpad-state-v2.5-*` để không dùng body cache v2.4.
+- Snapshot `Object Github/v2.5`; giữ nguyên `v2.4`.
+
+### Goal (nền từ v1.6)
 
 - Trigger qua GitHub Actions (`workflow_dispatch`)
 - Download + build ebook server-side

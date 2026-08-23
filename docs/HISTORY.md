@@ -1,5 +1,12 @@
 ## History — Wattpad Downloader (GitHub Actions)
 
+### v2.5 (2026-08-23)
+
+- **Wattpad TXT/MD/JSON — mất xuống dòng**: `parseParagraphs` trước đây xóa mọi tag HTML (kể cả `<br>`) nên truyện nhét cả chương vào một `<p>` thành **một dòng** trong TXT. EPUB vẫn “có đoạn” nhờ CSS `p { margin }`. v2.5 đổi `<br>` / đóng block thành newline, tách thành nhiều đoạn — TXT cách dòng trống như EPUB.
+- **EPUB**: nếu đoạn còn `\n` thì tách thành nhiều `<p>` (không nhét newline vào XHTML).
+- **Actions cache**: key `wattpad-state-v2.5-…` (không restore cache v2.4 — body cũ đã mất xuống dòng). Lần chạy đầu sau update **tải lại chương**.
+- Gói **`Object Github/v2.5`**: snapshot đầy đủ; `REPO-CORE-V2.5.txt`. v2.4 giữ nguyên trong `Object Github/v2.4`. Hướng dẫn push: `docs/GITHUB-UPDATE.md`.
+
 ### v2.4 (2026-04-08)
 
 - **Wattpad UI — «Xem chapters» / nhiều URL**: không còn gọi metadata **song song** toàn bộ URL (`Promise.all`); chuyển sang **lần lượt** + delay ngắn giữa các request để giảm **HTTP 400** khi dán danh sách dài. Sau vòng đầu, **thử lại một lần** các URL vẫn lỗi (pause ~2,5s). Nút «Thử lại lỗi» cũng xử lý **tuần tự**.

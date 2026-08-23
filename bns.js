@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bạch Ngọc Sách (bachngocsach.cc) Downloader — GitHub Actions edition v2.4
+ * Bạch Ngọc Sách (bachngocsach.cc) Downloader — GitHub Actions edition v2.5
  *
  * - Yêu cầu login (XenForo forum SSO).
  * - Lấy mục lục (page=all) → tải chương → xuất EPUB/TXT/MD/JSON.
@@ -627,7 +627,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-BNS Downloader v2.4
+BNS Downloader v2.5
 ===================
 node bns.js --story-url <url> --format epub,txt,md,json --output ./output --state ./bns-state.json
 node bns.js --batch <file> --format epub,txt,md,json --output ./output --state ./bns-state.json
@@ -699,7 +699,7 @@ Options:
   if (!storyUrls.length) throw new Error("Danh sách story_url rỗng");
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`BNS Downloader v2.4`);
+  console.log(`BNS Downloader v2.5`);
   console.log(`Stories: ${storyUrls.length}`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);

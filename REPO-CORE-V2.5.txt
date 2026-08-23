@@ -1,0 +1,25 @@
+=== File cần thiết cho repo lõi v2.5 (kế thừa v2.4) ===
+
+[Core]
+  .gitignore
+  package.json
+  package-lock.json
+  README.md
+  urls.txt
+  wattpad.js          ← v2.5: htmlFragmentToText; tách paras theo <br>; EPUB tách <p>
+  bns.js              ← nhãn v2.5 (logic BNS không đổi so với v2.4)
+  .github/workflows/download.yml   ← v2.5: name; cache wattpad-state-v2.5-
+  .github/workflows/bns-download.yml  ← name v2.5
+  bns-browser-bridge.mjs
+  bns-playwright-cookie.mjs
+
+[Tài liệu + UI]
+  docs/               ← HISTORY/GUIDE/PLAN v2.5; GITHUB-UPDATE.md
+  index.html          ← v2.5: nhãn; ghi chú TXT xuống dòng
+
+[Sau khi clone]
+  npm install
+
+[Ghi chú v2.5]
+  Snapshot đầy đủ trong Object Github/v2.5; v2.4 giữ nguyên trong Object Github/v2.4.
+  Đưa lên GitHub: copy nội dung thư mục v2.5 vào root repo — xem docs/GITHUB-UPDATE.md.

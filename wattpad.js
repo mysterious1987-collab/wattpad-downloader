@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Wattpad Batch Downloader — GitHub Actions edition v2.4
+ * Wattpad Batch Downloader — GitHub Actions edition v2.5
  *
  * Mục tiêu:
  * - Chạy được trong GitHub Actions (offline về phía máy bạn: tải artifact về).
@@ -12,6 +12,7 @@
  * - v2.2: (UI index.html) fetch metadata Wattpad: fields dự phòng + proxy r.jina.ai / AllOrigins raw — xem HISTORY.
  * - v2.3: (BNS) multi-link + auto-name; wattpad core giữ nguyên v2.2.
  * - v2.4: --file-basename api-title|story-id; retry HTTP 400 khi lấy metadata (Wattpad chặn tạm).
+ * - v2.5: parse HTML giữ xuống dòng (`<br>` / block tags) — TXT/MD/JSON không còn dính một dòng; EPUB tách `<p>`.
  *
  * Cách dùng:
  *   node wattpad.js --batch urls.txt --format epub --output ./output
@@ -269,20 +270,44 @@ function decodeHtml(s) {
     .replace(/&nbsp;/g, " ");
 }
 
+/** Đổi `<br>` / đóng block thành newline trước khi strip tag — tránh TXT dính một dòng. */
+function htmlFragmentToText(html) {
+  const raw = String(html || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|blockquote|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  return decodeHtml(raw)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function expandParaLines(id, text) {
+  const chunks = String(text || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+  if (!chunks.length) return [];
+  if (chunks.length === 1) return [{ id, text: chunks[0] }];
+  return chunks.map((t, i) => ({ id: id != null ? `${id}_${i}` : null, text: t }));
+}
+
 function parseParagraphs(html) {
   const paras = [], seen = new Set();
   const re = /<p[^>]*data-p-id="([^"]*)"[^>]*>([\s\S]*?)<\/p>/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
     const id = m[1];
-    const text = decodeHtml(m[2].replace(/<[^>]+>/g, "")).trim();
-    if (text && !seen.has(id)) { seen.add(id); paras.push({ id, text }); }
+    const text = htmlFragmentToText(m[2]);
+    if (text && !seen.has(id)) {
+      seen.add(id);
+      paras.push(...expandParaLines(id, text));
+    }
   }
   if (paras.length === 0) {
     const re2 = /<p[^>]*>([\s\S]*?)<\/p>/gi;
     while ((m = re2.exec(html)) !== null) {
-      const text = decodeHtml(m[1].replace(/<[^>]+>/g, "")).trim();
-      if (text && text.length > 3) paras.push({ id: null, text });
+      const text = htmlFragmentToText(m[1]);
+      if (text && text.length > 3) paras.push(...expandParaLines(null, text));
     }
   }
   return paras;
@@ -590,7 +615,8 @@ async function toEpub(meta, chapters) {
   const files = [];
   for (let i = 0; i < chapters.length; i++) {
     const ch = chapters[i], fn = `ch${String(i+1).padStart(4,"0")}.xhtml`;
-    const body = ch.paras.map(p=>`<p>${escXml(p.text)}</p>`).join("");
+    const body = ch.paras.flatMap(p => String(p.text || "").split(/\n+/).map(s => s.trim()).filter(Boolean))
+      .map(line => `<p>${escXml(line)}</p>`).join("");
     await zw.add(`OEBPS/Text/${fn}`, new TextReader(`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="UTF-8"/><title>${escXml(ch.title)}</title><link rel="stylesheet" type="text/css" href="../stylesheet.css"/></head><body><h2>${escXml(ch.title)}</h2>${body}</body></html>`));
     files.push({ fn, title: ch.title, id: `c${i+1}` });
   }
@@ -735,7 +761,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("--help")) {
     console.log(`
-Wattpad Downloader v2.4
+Wattpad Downloader v2.5
 =======================
 node wattpad.js [url...]            Tải trực tiếp
 node wattpad.js --batch urls.txt    Tải từ file
@@ -838,7 +864,7 @@ Options:
   const state = await loadState(stateFile);
 
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`Wattpad Downloader v2.4`);
+  console.log(`Wattpad Downloader v2.5`);
   console.log(`Format : ${formats.join(", ").toUpperCase()}`);
   console.log(`Files  : basename=${fileBasenameMode === "story_id" ? "story_id (wattpad_<id>)" : "api_title"}`);
   console.log(`Output : ${outputDir} | State: ${stateFile}`);
