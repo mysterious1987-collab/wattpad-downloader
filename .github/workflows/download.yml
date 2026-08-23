@@ -1,4 +1,4 @@
-name: Wattpad Downloader v2.4
+name: Wattpad Downloader v2.5
 
 on:
   workflow_dispatch:
@@ -116,14 +116,14 @@ jobs:
           path: |
             state.json
             state-bodies
-          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+          key: wattpad-state-v2.5-${{ hashFiles('urls_run.txt') }}
           restore-keys: |
-            wattpad-state-
+            wattpad-state-v2.5-
 
       - name: State cache diagnostics (sau Restore)
         run: |
           echo "=== State cache diagnostics (A: kiểm tra cache Actions có về runner không) ==="
-          echo "Lưu ý: key đầy đủ là wattpad-state-<sha256 urls_run.txt>; restore-keys có thể khôi phục entry cũ hơn (prefix wattpad-state-)."
+          echo "Lưu ý: key đầy đủ là wattpad-state-v2.5-<sha256 urls_run.txt>; restore-keys chỉ khớp prefix wattpad-state-v2.5- (không dùng cache v2.4 — body cũ đã mất xuống dòng)."
           echo ""
           echo "--- urls_run.txt (ảnh hưởng cache key) ---"
           if [ -f urls_run.txt ]; then
@@ -189,7 +189,7 @@ jobs:
           path: |
             state.json
             state-bodies
-          key: wattpad-state-${{ hashFiles('urls_run.txt') }}
+          key: wattpad-state-v2.5-${{ hashFiles('urls_run.txt') }}
 
       - name: List output files
         run: |
